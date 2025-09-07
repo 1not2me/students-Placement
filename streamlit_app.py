@@ -1,9 +1,8 @@
-# app_admin.py
+# -*- coding: utf-8 -*-
 import streamlit as st
 import pandas as pd
 import numpy as np
-import re, json, io, math, random
-from pathlib import Path
+import re, json, io
 from datetime import datetime
 
 # =========================
@@ -31,8 +30,7 @@ st.markdown("""
   padding:1.5rem 1.5rem 2rem;
 }
 .stTabs [data-baseweb="tab"]{
-  border-radius:14px!important;
-  background:rgba(255,255,255,.7);
+  border-radius:14px!important; background:rgba(255,255,255,.7);
   margin-inline-start:.5rem; padding:.5rem 1rem; font-weight:600;
 }
 .stTabs [data-baseweb="tab"]:hover{ background:rgba(255,255,255,.95); }
@@ -45,16 +43,16 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # =========================
-# אימות מנהל (סיסמה ב-secrets)
+# אימות מנהל
 # =========================
-ADMIN_PASSWORD = st.secrets.get("ADMIN_PASSWORD", None)  # שימי/ם ב-secrets!
-st.title("🧭 מערכת שיבוץ – ממשק מנהלים")
+# אם לא הוגדר ב-secrets, תהיה סיסמת ברירת-מחדל "admin123"
+ADMIN_PASSWORD = st.secrets.get("ADMIN_PASSWORD", "admin123")
 
+st.title("🧭 מערכת שיבוץ – ממשק מנהלים")
 with st.expander("🔐 כניסת מנהל", expanded=True):
-    pwd = st.text_input("סיסמה", type="password", help="שמרו ADMIN_PASSWORD ב־Secrets של Streamlit Cloud.")
-    if not ADMIN_PASSWORD:
-        st.warning("לא הוגדרה סיסמת מנהל ב-secrets. (משתמש ב-DEV ללא סיסמה)")
-    if ADMIN_PASSWORD and pwd != ADMIN_PASSWORD:
+    pwd = st.text_input("סיסמה", type="password", value="")
+    if pwd != ADMIN_PASSWORD:
+        st.info("הכניסו סיסמה. (ברירת-מחדל לדמו: **admin123**) – מומלץ לשים ADMIN_PASSWORD ב-Secrets")
         st.stop()
 
 # =========================
@@ -63,7 +61,7 @@ with st.expander("🔐 כניסת מנהל", expanded=True):
 def norm(x):
     if pd.isna(x): return ""
     s = str(x).strip().lower()
-    s = re.sub(r"[^\w\u0590-\u05FF\s,;:/\-]+", " ", s)  # אותיות/ספרות/עברית
+    s = re.sub(r"[^\w\u0590-\u05FF\s,;:/\-]+", " ", s)
     s = re.sub(r"\s+", " ", s)
     return s
 
@@ -74,7 +72,6 @@ def split_multi(val):
     return [p.strip() for p in parts if p.strip()]
 
 def rank_to_score(rank, max_rank=10):
-    # נמוך=מועדף; ממיר לדירוג חיובי (10 -> 1, 1 -> 10)
     if pd.isna(rank): return 0.0
     try:
         r = int(rank)
@@ -84,20 +81,38 @@ def rank_to_score(rank, max_rank=10):
         return 0.0
 
 # =========================
+# קריאת קבצים בטוחה (CSV/Excel)
+# =========================
+def read_any(upload):
+    """קורא CSV/Excel. אם חסר openpyxl – מודיע ומחזיר None עבור Excel."""
+    if upload is None:
+        return None
+    name = upload.name.lower()
+    if name.endswith(".csv"):
+        return pd.read_csv(upload, encoding="utf-8-sig")
+    if name.endswith(".xlsx"):
+        try:
+            # pandas יבחר openpyxl; אם לא מותקן – נתפוס ונסביר
+            return pd.read_excel(upload)
+        except ImportError as e:
+            st.error("נדרש המודול **openpyxl** לקריאת Excel בענן. "
+                     "העלו CSV או הוסיפו `openpyxl` ל-requirements.txt (מצורף בהמשך).")
+            return None
+        except Exception as e:
+            st.error(f"שגיאה בקריאת Excel: {e}")
+            return None
+    st.error("סוג קובץ לא נתמך. השתמשו ב-CSV או Excel (xlsx).")
+    return None
+
+# =========================
 # העלאת נתונים
 # =========================
 st.header("1) נתונים")
 c1,c2 = st.columns(2)
 with c1:
-    stu_file = st.file_uploader("טעינת קובץ סטודנטים (CSV/Excel)", type=["csv","xlsx"])
+    stu_file = st.file_uploader("טעינת קובץ סטודנטים (CSV/Excel)", type=["csv","xlsx"], key="stu")
 with c2:
-    site_file = st.file_uploader("טעינת קובץ אתרים/מדריכים (CSV/Excel)", type=["csv","xlsx"])
-
-def read_any(file):
-    if file is None: return None
-    if file.name.lower().endswith(".xlsx"):
-        return pd.read_excel(file)
-    return pd.read_csv(file, encoding="utf-8-sig")
+    site_file = st.file_uploader("טעינת קובץ אתרים/מדריכים (CSV/Excel)", type=["csv","xlsx"], key="site")
 
 students_df = read_any(stu_file)
 sites_df     = read_any(site_file)
@@ -129,11 +144,10 @@ with sc1:
     m_stu["last"]       = st.selectbox("שם משפחה", stu_cols, index=min(2,len(stu_cols)-1))
     m_stu["city"]       = st.selectbox("עיר/יישוב סטודנט (לא חובה)", ["— אין —"]+stu_cols, index=0)
     m_stu["top_domain"] = st.selectbox("תחום מוביל", stu_cols)
-    m_stu["domains"]    = st.selectbox("רשימת תחומים (מורכב; מופרד בפסיקים/נקודה פסיק)", ["— אין —"]+stu_cols, index=0)
-    m_stu["score_col"]  = st.selectbox("מדד עדיפות (למשל ממוצע/מוטיבציה; אופציונלי)", ["— אין —"]+stu_cols, index=0)
-    # איתור עמודות דירוג לאתרים לפי שם העמודה שמתחילה ב'rank_' (מומלץ)
+    m_stu["domains"]    = st.selectbox("רשימת תחומים (מופרד בפסיקים/נקודה פסיק)", ["— אין —"]+stu_cols, index=0)
+    m_stu["score_col"]  = st.selectbox("מדד עדיפות/ממוצע (אופציונלי)", ["— אין —"]+stu_cols, index=0)
     rank_candidates = [c for c in stu_cols if norm(c).startswith("rank")]
-    rank_hint = st.multiselect("עמודות דירוג אתרים (אופציונלי; עדיף שמות עמודות rank_שם_אתר)", rank_candidates, default=rank_candidates)
+    rank_hint = st.multiselect("עמודות דירוג אתרים (מומלץ: rank_שם_אתר)", rank_candidates, default=rank_candidates)
 
 with sc2:
     st.subheader("אתרים/מדריכים")
@@ -143,10 +157,10 @@ with sc2:
     m_site["name"]    = st.selectbox("שם אתר", site_cols, index=min(1,len(site_cols)-1))
     m_site["city"]    = st.selectbox("עיר/יישוב אתר (לא חובה)", ["— אין —"]+site_cols, index=0)
     m_site["domains"] = st.selectbox("תחום/תחומים של האתר", site_cols)
-    m_site["cap"]     = st.selectbox("קיבולת (מספר סטודנטים שניתן לשבץ)", site_cols)
+    m_site["cap"]     = st.selectbox("קיבולת (מספר סטודנטים)", site_cols)
     m_site["mentor"]  = st.selectbox("שם מדריך (לא חובה)", ["— אין —"]+site_cols, index=0)
 
-# הפקת DataFrames נקיים
+# DataFrames מנורמלים
 stu = students_df.copy()
 stu["_id"]   = stu[m_stu["id"]].astype(str)
 stu["_first"]= stu[m_stu["first"]].astype(str)
@@ -167,10 +181,9 @@ site["_domains"]= site[m_site["domains"]].astype(str)
 site["_cap"]   = pd.to_numeric(site[m_site["cap"]], errors="coerce").fillna(0).astype(int)
 site["_mentor"]= "" if m_site["mentor"]=="— אין —" else site[m_site["mentor"]].astype(str)
 
-# מילון דירוגים לפי שם אתר בעמודות הסטודנט
 rank_map_cols = {}
 for col in rank_hint:
-    rank_map_cols[norm(col).replace("rank","rank").strip()] = col  # שמירה על שם מקורי
+    rank_map_cols[norm(col).replace("rank","rank").strip()] = col
 
 # =========================
 # משקולות וחוקים
@@ -181,26 +194,23 @@ with wcol1:
     W_DOMAIN_MATCH     = st.slider("משקל חפיפת תחומים", 0.0, 10.0, 5.0, 0.5)
     W_TOP_DOMAIN_BONUS = st.slider("בונוס תחום מוביל", 0.0, 10.0, 3.0, 0.5)
 with wcol2:
-    W_RANK_SITE        = st.slider("משקל דירוג אתרים (rank_* בעמודת הסטודנט)", 0.0, 10.0, 4.0, 0.5)
+    W_RANK_SITE        = st.slider("משקל דירוג אתרים (rank_*)", 0.0, 10.0, 4.0, 0.5)
     MAX_RANK_VAL       = st.slider("ערך דירוג מקס׳ (למשל 10)", 5, 20, 10, 1)
 with wcol3:
     W_STUDENT_PRIORITY = st.slider("משקל עדיפות/ממוצע סטודנט", 0.0, 10.0, 2.0, 0.5)
-    RANDOM_SEED        = st.number_input("Seed לשחזור (מספר שלם)", min_value=0, value=42, step=1)
+    RANDOM_SEED        = st.number_input("Seed לשחזור", min_value=0, value=42, step=1)
 
-st.caption("האלגוריתם: חישוב ציון התאמה לכל צמד סטודנט×אתר → מיון יורד לפי ציון (ואז לפי עדיפות סטודנט ו-Seed) → שיבוץ גרידי תוך הקפדה על קיבולת.")
+st.caption("האלגוריתם: חישוב ציון לכל צמד סטודנט×אתר → מיון יורד → גרידי עם קיבולות.")
 
 # =========================
 # ניקוד לכל צמד
 # =========================
 def site_rank_for_student(row, sname):
-    # חיפוש עמודת rank המתאימה לשם אתר (התאמה גסה לפי הנורמליזציה)
     if not rank_map_cols: return 0.0
     key = "rank_" + norm(sname).replace(" ", "_")
-    # נסה התאמה ישירה
     for k, col in rank_map_cols.items():
         if key in k:
             return rank_to_score(row.get(col, np.nan), MAX_RANK_VAL)
-    # fallback: חפש col שמכיל את שם האתר
     for k, col in rank_map_cols.items():
         if norm(sname) in k:
             return rank_to_score(row.get(col, np.nan), MAX_RANK_VAL)
@@ -213,13 +223,12 @@ def compute_scores(stu_df: pd.DataFrame, site_df: pd.DataFrame) -> pd.DataFrame:
         s_top     = norm(s["_top"])
         for _, t in site_df.iterrows():
             t_domains = set(split_multi(t["_domains"]))
-            # חפיפת תחומים (Jaccard)
             inter = len(s_domains & t_domains)
             union = max(1, len(s_domains | t_domains))
             domain_score = (inter/union) * W_DOMAIN_MATCH if union>0 else 0.0
-            top_bonus = W_TOP_DOMAIN_BONUS if s_top and (s_top in t_domains) else 0.0
-            rank_score = site_rank_for_student(s, t["_sname"]) * (W_RANK_SITE/10.0)  # נורמליזציה קלה
-            prio_score = float(s["_prio"]) * (W_STUDENT_PRIORITY/10.0)
+            top_bonus    = W_TOP_DOMAIN_BONUS if s_top and (s_top in t_domains) else 0.0
+            rank_score   = site_rank_for_student(s, t["_sname"]) * (W_RANK_SITE/10.0)
+            prio_score   = float(s["_prio"]) * (W_STUDENT_PRIORITY/10.0)
 
             total = domain_score + top_bonus + rank_score + prio_score
             rows.append({
@@ -238,11 +247,10 @@ def compute_scores(stu_df: pd.DataFrame, site_df: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 # =========================
-# שיבוץ גרידי עם קיבולות
+# שיבוץ גרידי
 # =========================
 def greedy_assign(scores: pd.DataFrame, site_caps: pd.Series, seed: int = 42):
     rnd = np.random.RandomState(seed)
-    # מיון: ציון יורד, אח"כ עדיפות סטודנט יורד, ואז טיפה רעש כדי לשבור שוויון
     scores = scores.copy()
     scores["tie"] = rnd.rand(len(scores))
     scores = scores.sort_values(by=["score","student_prio_raw","tie"], ascending=[False,False,True])
@@ -259,7 +267,6 @@ def greedy_assign(scores: pd.DataFrame, site_caps: pd.Series, seed: int = 42):
             continue
         if used_caps.get(sid,0) <= 0:
             continue
-        # משבצים
         taken_students.add(stid)
         used_caps[sid] -= 1
         assigned.setdefault(sid, []).append(r)
@@ -299,39 +306,33 @@ if st.button("🚀 חשב ניקוד ושבץ"):
 
     # טבלת שיבוץ
     st.subheader("📋 תוצאות שיבוץ")
-    # הוספת מידע מסייע
     out = asg[["student_id","student_name","site_id","site_name","mentor","score"]].copy()
-    # ווידוא שכל הסטודנטים מופיעים גם אם לא שובצו:
+
+    # כל הסטודנטים – גם מי שלא שובץ
     not_asg = set(stu["_id"]) - set(out["student_id"])
     if not_asg:
-        out = pd.concat([out, pd.DataFrame({
+        add = pd.DataFrame({
             "student_id": list(not_asg),
-            "student_name": [stu.loc[stu["_id"]==sid, "_first"].astype(str).str.cat(stu.loc[stu["_id"]==sid, "_last"].astype(str), sep=" ").iloc[0] 
-                             if (stu["_id"]==sid).any() else "" for sid in not_asg],
+            "student_name": [
+                (stu.loc[stu["_id"]==sid, "_first"].astype(str).str.cat(
+                 stu.loc[stu["_id"]==sid, "_last"].astype(str), sep=" ").iloc[0]
+                 if (stu["_id"]==sid).any() else "")
+                for sid in not_asg
+            ],
             "site_id": [""]*len(not_asg),
             "site_name": ["(טרם שובץ)"]*len(not_asg),
             "mentor": ["" for _ in not_asg],
             "score": [0.0 for _ in not_asg],
-        })], ignore_index=True)
+        })
+        out = pd.concat([out, add], ignore_index=True)
 
     st.dataframe(out.sort_values(["site_name","student_name"]), use_container_width=True, height=420)
 
-    # עריכה ידנית (אופציונלי)
-    st.subheader("✍️ עריכה ידנית (ניסיוני)")
-    edited = st.experimental_data_editor(out, use_container_width=True, num_rows="dynamic", key="edit_table")
-    st.caption("אפשר לשנות ידנית שדה 'site_name' או 'site_id'. לאחר עריכה – אשרו עדכון קיבולות והפקה מחדש.")
-
-    # בדיקת קיבולות אחרי עריכה
-    if st.button("🧮 בדיקת קיבולות אחרי עריכה"):
-        check = edited.groupby("site_id").size().rename("assigned_after_edit").reset_index()
-        check = check.merge(site[["_sid","_sname","_cap"]], left_on="site_id", right_on="_sid", how="left")
-        check["over_capacity"] = check["assigned_after_edit"] - check["_cap"]
-        st.dataframe(check.fillna({"_cap":0}).sort_values("over_capacity", ascending=False), use_container_width=True)
-
     # הורדות
     st.subheader("⬇️ הורדה")
-    tsv = out.to_csv(index=False, encoding="utf-8-sig")
-    st.download_button("📥 הורדת שיבוצים (CSV)", data=tsv, file_name="assignments.csv", mime="text/csv")
+    st.download_button("📥 הורדת שיבוצים (CSV)",
+                       data=out.to_csv(index=False, encoding="utf-8-sig"),
+                       file_name="assignments.csv", mime="text/csv")
 
     xls_buf = io.BytesIO()
     with pd.ExcelWriter(xls_buf, engine="xlsxwriter") as w:
@@ -339,11 +340,12 @@ if st.button("🚀 חשב ניקוד ושבץ"):
         scores_df.head(5000).to_excel(w, sheet_name="scores_sample", index=False)
         log.to_excel(w, sheet_name="log", index=False)
     xls_buf.seek(0)
-    st.download_button("📥 הורדת חבילה (Excel)", data=xls_buf.getvalue(),
+    st.download_button("📥 הורדת חבילה (Excel)",
+                       data=xls_buf.getvalue(),
                        file_name=f"placements_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
-    # שמירת קונפיג/שחזור
+    # קונפיג לשחזור
     st.subheader("🧩 קונפיג")
     config = {
         "student_mapping": m_stu, "site_mapping": m_site,
@@ -362,5 +364,4 @@ if st.button("🚀 חשב ניקוד ושבץ"):
                        data=json.dumps(config, ensure_ascii=False, indent=2),
                        file_name="placement_config.json", mime="application/json")
 else:
-    st.info("טענו נתונים, מיפו עמודות, הגדירו משקולות ולחצו על **🚀 חשב ניקוד ושבץ**.")
-
+    st.info("טענו קבצים, מיפו עמודות, הגדירו משקולות ולחצו על **🚀 חשב ניקוד ושבץ**.")
