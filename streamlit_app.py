@@ -1,5 +1,5 @@
 
-# matcher_streamlit_beauty_v2.py
+# matcher_streamlit_beauty_v3.py
 # -*- coding: utf-8 -*-
 import streamlit as st
 import pandas as pd
@@ -9,31 +9,18 @@ from typing import Optional, Dict, Any, List
 
 st.set_page_config(page_title="מערכת שיבוץ סטודנטים – התאמה חכמה", layout="wide")
 
-# ====== CSS (exactly as user requested) ======
-# Note: the @font-face URL is a placeholder. Replace with a valid font URL if needed.
+# ====== CSS (as requested earlier) ======
 st.markdown("""
 <style>
 @font-face {
   font-family:'David';
   src:url('https://example.com/David.ttf') format('truetype');
 }
-html, body, [class*="css"] {
-  font-family:'David',sans-serif!important;
-}
-
-/* ====== עיצוב מודרני + RTL ====== */
+html, body, [class*="css"] { font-family:'David',sans-serif!important; }
 :root{
-  --bg-1:#e0f7fa;
-  --bg-2:#ede7f6;
-  --bg-3:#fff3e0;
-  --bg-4:#fce4ec;
-  --bg-5:#e8f5e9;
-  --ink:#0f172a;
-  --primary:#9b5de5;
-  --primary-700:#f15bb5;
-  --ring:rgba(155,93,229,.35);
+  --bg-1:#e0f7fa; --bg-2:#ede7f6; --bg-3:#fff3e0; --bg-4:#fce4ec; --bg-5:#e8f5e9;
+  --ink:#0f172a; --primary:#9b5de5; --primary-700:#f15bb5; --ring:rgba(155,93,229,.35);
 }
-
 [data-testid="stAppViewContainer"]{
   background:
     radial-gradient(1200px 600px at 15% 10%, var(--bg-2) 0%, transparent 70%),
@@ -43,91 +30,27 @@ html, body, [class*="css"] {
     linear-gradient(135deg, var(--bg-1) 0%, #ffffff 100%) !important;
   color: var(--ink);
 }
-
-.main .block-container{
-  background: rgba(255,255,255,.78);
-  backdrop-filter: blur(10px);
-  border:1px solid rgba(15,23,42,.08);
-  box-shadow:0 15px 35px rgba(15,23,42,.08);
-  border-radius:24px;
-  padding:2.5rem;
-  margin-top:1rem;
-}
-
-/* כותרות */
+.main .block-container{ background: rgba(255,255,255,.78); backdrop-filter: blur(10px);
+  border:1px solid rgba(15,23,42,.08); box-shadow:0 15px 35px rgba(15,23,42,.08);
+  border-radius:24px; padding:2.5rem; margin-top:1rem; }
 h1,h2,h3,.stMarkdown h1,.stMarkdown h2{
-  text-align:center;
-  letter-spacing:.5px;
-  text-shadow:0 1px 2px rgba(255,255,255,.7);
-  font-weight:700;
-  color:#222;
-  margin-bottom:1rem;
+  text-align:center; letter-spacing:.5px; text-shadow:0 1px 2px rgba(255,255,255,.7);
+  font-weight:700; color:#222; margin-bottom:1rem;
 }
-
-/* כפתור */
 .stButton > button{
   background:linear-gradient(135deg,var(--primary) 0%,var(--primary-700) 100%)!important;
-  color:#fff!important;
-  border:none!important;
-  border-radius:18px!important;
-  padding:1rem 2rem!important;
-  font-size:1.1rem!important;
-  font-weight:600!important;
-  box-shadow:0 8px 18px var(--ring)!important;
-  transition:all .15s ease!important;
+  color:#fff!important; border:none!important; border-radius:18px!important;
+  padding:1rem 2rem!important; font-size:1.1rem!important; font-weight:600!important;
+  box-shadow:0 8px 18px var(--ring)!important; transition:all .15s ease!important;
 }
-.stButton > button:hover{
-  transform:translateY(-3px) scale(1.02);
-  filter:brightness(1.08);
-}
-.stButton > button:focus{
-  outline:none!important;
-  box-shadow:0 0 0 4px var(--ring)!important;
-}
-
-/* קלטים */
-div.stSelectbox > div,
-div.stMultiSelect > div,
-.stTextInput > div > div > input{
-  border-radius:14px!important;
-  border:1px solid rgba(15,23,42,.12)!important;
-  box-shadow:0 3px 10px rgba(15,23,42,.04)!important;
-  padding:.6rem .8rem!important;
-  color:var(--ink)!important;
-  font-size:1rem!important;
-}
-
-/* טאבים – רוחב קטן יותר */
-.stTabs [data-baseweb="tab"]{
-  border-radius:14px!important;
-  background:rgba(255,255,255,.65);
-  margin-inline-start:.3rem;
-  padding:.4rem .8rem;
-  font-weight:600;
-  min-width: 110px !important;   /* במקום 160px */
-  text-align:center;
-  font-size:0.9rem !important;   /* טקסט קטן יותר */
-}
-
-.stTabs [data-baseweb="tab"]:hover{
-  background:rgba(255,255,255,.9);
-}
-
-/* RTL */
-.stApp,.main,[data-testid="stSidebar"]{
-  direction:rtl;
-  text-align:right;
-}
-label,.stMarkdown,.stText,.stCaption{
-  text-align:right!important;
-}
-
-/* הסתרת "Press Enter to apply" ככל האפשר */
-[data-testid="stFormStatus"], .stTooltipContent, div:has(> .st-key-PressEnterToApply) { display:none !important; }
+.stButton > button:hover{ transform:translateY(-3px) scale(1.02); filter:brightness(1.08); }
+.stButton > button:focus{ outline:none!important; box-shadow:0 0 0 4px var(--ring)!important; }
+.stApp,.main,[data-testid="stSidebar"]{ direction:rtl; text-align:right; }
+label,.stMarkdown,.stText,.stCaption{ text-align:right!important; }
 </style>
 """, unsafe_allow_html=True)
 
-# ====== Logic (no distance controls; fixed weights) ======
+# ====== Logic (fixed weights; no distances) ======
 @dataclass
 class Weights:
     w_field: float = 0.70
@@ -146,7 +69,6 @@ STU_COLS = {
     "special_req": ["בקשה מיוחדת"],
     "partner": ["בן/בת זוג להכשרה", "בן\\בת זוג להכשרה", "בן/בת זוג", "בן\\בת זוג"]
 }
-
 SITE_COLS = {
     "name": ["מוסד / שירות הכשרה", "מוסד", "שם מוסד ההתמחות"],
     "field": ["תחום ההתמחות", "תחום התמחות"],
@@ -369,66 +291,29 @@ def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, W: Weights) 
 
 W = Weights()
 
-# ====== Sections in the requested order ======
+# ====== Sections ======
 st.markdown("# מערכת שיבוץ סטודנטים – התאמה חכמה")
 st.markdown("מערכת נקייה ומודרנית לעיבוד קבצי סטודנטים ואתרי התמחות ושיבוץ חכם – ללא פרמטרים מסובכים.")
 
-# 1) הוראות שימוש
-st.subheader("📘 הוראות שימוש")
-st.markdown("""
-1. הכינו **קובץ סטודנטים** (CSV/XLSX): שם פרטי, שם משפחה, תעודת זהות, כתובת/עיר, טלפון, אימייל. (אופציונלי: תחום מועדף, בקשה מיוחדת, בן/בת זוג להכשרה).  
-2. הכינו **קובץ אתרי התמחות/מדריכים** (CSV/XLSX): מוסד/שירות, תחום התמחות, רחוב, עיר, מספר סטודנטים שניתן לקלוט השנה. (אופציונלי: שם פרטי+שם משפחה של המדריך, טלפון, אימייל).  
-3. לחצו **בצע שיבוץ**. האלגוריתם מחשב אחוז התאמה לפי תחום (70%), עיר (20%) ובקשות מיוחדות (10%), כולל קיבולת והפרדת בני/בנות זוג.  
-4. הורידו את קובץ התוצאות.
-""")
-
-# 2) העלאת קבצים
+# UPLOAD
 st.subheader("📤 העלאת קבצים")
 colA, colB = st.columns(2, gap="large")
 with colA:
     students_file = st.file_uploader("קובץ סטודנטים", type=["csv","xlsx","xls"], key="students_file")
     if students_file is not None:
         st.caption("הצצה ל-5 הרשומות הראשונות:")
-        try:
-            df_students_raw = read_any(students_file)
-            st.dataframe(df_students_raw.head(5), use_container_width=True)
-        except Exception:
-            st.error("לא ניתן לקרוא את הקובץ. ודאו שהוא CSV/XLSX תקין.")
-            df_students_raw = None
+        df_students_raw = read_any(students_file); st.dataframe(df_students_raw.head(5), use_container_width=True)
     else:
         df_students_raw = None
 with colB:
     sites_file = st.file_uploader("קובץ אתרי התמחות/מדריכים", type=["csv","xlsx","xls"], key="sites_file")
     if sites_file is not None:
         st.caption("הצצה ל-5 הרשומות הראשונות:")
-        try:
-            df_sites_raw = read_any(sites_file)
-            st.dataframe(df_sites_raw.head(5), use_container_width=True)
-        except Exception:
-            st.error("לא ניתן לקרוא את הקובץ. ודאו שהוא CSV/XLSX תקין.")
-            df_sites_raw = None
+        df_sites_raw = read_any(sites_file); st.dataframe(df_sites_raw.head(5), use_container_width=True)
     else:
         df_sites_raw = None
 
-# 3) דוגמה לשימוש
-st.subheader("🧪 דוגמה לשימוש")
-example_students = pd.DataFrame([
-    {"שם פרטי":"רות", "שם משפחה":"כהן", "תעודת זהות":"123456789", "כתובת":"הרצל 12", "עיר מגורים":"תל אביב", "טלפון":"0501111111", "דוא\"ל":"ruth@example.com", "תחום מועדף":"בריאות הנפש"},
-    {"שם פרטי":"יואב", "שם משפחה":"לוי", "תעודת זהות":"987654321", "כתובת":"דיזנגוף 80", "עיר מגורים":"תל אביב", "טלפון":"0502222222", "דוא\"ל":"yoav@example.com", "תחום מועדף":"רווחה"}
-])
-example_sites = pd.DataFrame([
-    {"מוסד / שירות הכשרה":"מרכז חוסן תל אביב", "תחום ההתמחות":"בריאות הנפש", "רחוב":"אבן גבירול 1", "עיר":"תל אביב", "מספר סטודנטים שניתן לקלוט השנה":2},
-    {"מוסד / שירות הכשרה":"מחלקת רווחה רמת גן", "תחום ההתמחות":"רווחה", "רחוב":"ביאליק 10", "עיר":"רמת גן", "מספר סטודנטים שניתן לקלוט השנה":1},
-])
-colX, colY = st.columns(2, gap="large")
-with colX:
-    st.write("**דוגמה – סטודנטים**")
-    st.dataframe(example_students, use_container_width=True)
-with colY:
-    st.write("**דוגמה – אתרי התמחות/מדריכים**")
-    st.dataframe(example_sites, use_container_width=True)
-
-# 4) שיבוץ
+# RUN
 st.subheader("⚙️ ביצוע השיבוץ")
 run_btn = st.button("🚀 בצע שיבוץ", use_container_width=True)
 
@@ -437,22 +322,39 @@ if run_btn:
     if students_file is None or sites_file is None:
         st.error("נא להעלות את שני הקבצים לפני הפעלת השיבוץ.")
     else:
-        try:
-            for df in (df_students_raw, df_sites_raw):
-                drop_cols = [c for c in df.columns if str(c).startswith("Unnamed")]
-                df.drop(columns=drop_cols, inplace=True, errors="ignore")
-            students = resolve_students(df_students_raw)
-            sites = resolve_sites(df_sites_raw)
-            result_df = greedy_match(students, sites, W)
-            st.success("השיבוץ הושלם ✓")
-        except Exception as e:
-            st.exception(e)
+        for df in (df_students_raw, df_sites_raw):
+            drop_cols = [c for c in df.columns if str(c).startswith("Unnamed")]
+            df.drop(columns=drop_cols, inplace=True, errors="ignore")
+        students = resolve_students(df_students_raw)
+        sites = resolve_sites(df_sites_raw)
+        result_df = greedy_match(students, sites, W)
+        st.success("השיבוץ הושלם ✓")
 
-# 5) תוצאות השיבוץ
+# RESULTS + HEBREW-FRIENDLY EXPORTS
 st.subheader("📊 תוצאות השיבוץ")
 if result_df is not None and not result_df.empty:
     st.dataframe(result_df, use_container_width=True)
-    csv = result_df.to_csv(index=False, encoding="utf-8-sig")
-    st.download_button("⬇️ הורדת קובץ התוצאות (CSV)", data=csv, file_name="student_site_matching.csv", mime="text/csv")
+
+    # --- 1) CSV UTF‑8 with BOM (recommended) ---
+    csv_utf8 = result_df.to_csv(index=False, encoding="utf-8-sig")
+    st.download_button("⬇️ הורדת CSV (UTF‑8, מומלץ)", data=csv_utf8,
+                       file_name="student_site_matching_utf8.csv", mime="text/csv")
+
+    # --- 2) CSV Windows‑1255 (for very old Excel) ---
+    csv_cp1255 = result_df.to_csv(index=False).encode("cp1255", errors="replace")
+    st.download_button("⬇️ הורדת CSV (Windows‑1255)", data=csv_cp1255,
+                       file_name="student_site_matching_windows1255.csv", mime="text/csv")
+
+    # --- 3) Excel XLSX (always shows Hebrew properly) ---
+    from io import BytesIO
+    xlsx_buffer = BytesIO()
+    with pd.ExcelWriter(xlsx_buffer, engine="openpyxl") as writer:
+        result_df.to_excel(writer, sheet_name="שיבוץ", index=False)
+    xlsx_buffer.seek(0)
+    st.download_button("⬇️ הורדת Excel (XLSX)", data=xlsx_buffer,
+                       file_name="student_site_matching.xlsx",
+                       mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+    st.caption("טיפ: אם ה־CSV לא מוצג בעברית אצלך ב־Excel, השתמשי בקובץ ה־XLSX או ב־CSV בפורמט Windows‑1255.")
 else:
     st.caption("טרם הופעל שיבוץ או שאין תוצאות להצגה.")
