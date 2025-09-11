@@ -1,11 +1,11 @@
-# matcher_streamlit_beauty_rtl_v2.py
+# matcher_streamlit_beauty_rtl_v3.py
 # -*- coding: utf-8 -*-
 import streamlit as st
 import pandas as pd
 import numpy as np
 from io import BytesIO
 from dataclasses import dataclass
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Tuple
 
 st.set_page_config(page_title="מערכת שיבוץ סטודנטים – התאמה חכמה", layout="wide")
 
@@ -75,14 +75,8 @@ h1,h2,h3,.stMarkdown h1,.stMarkdown h2{
   box-shadow:0 8px 18px var(--ring)!important;
   transition:all .15s ease!important;
 }
-.stButton > button:hover{
-  transform:translateY(-3px) scale(1.02);
-  filter:brightness(1.08);
-}
-.stButton > button:focus{
-  outline:none!important;
-  box-shadow:0 0 0 4px var(--ring)!important;
-}
+.stButton > button:hover{ transform:translateY(-3px) scale(1.02); filter:brightness(1.08); }
+.stButton > button:focus{ outline:none!important; box-shadow:0 0 0 4px var(--ring)!important; }
 
 /* קלטים */
 div.stSelectbox > div,
@@ -107,23 +101,16 @@ div.stMultiSelect > div,
   text-align:center;
   font-size:0.9rem !important;
 }
-.stTabs [data-baseweb="tab"]:hover{
-  background:rgba(255,255,255,.9);
-}
+.stTabs [data-baseweb="tab"]:hover{ background:rgba(255,255,255,.9); }
 
 /* RTL */
-.stApp,.main,[data-testid="stSidebar"]{
-  direction:rtl;
-  text-align:right;
-}
-label,.stMarkdown,.stText,.stCaption{
-  text-align:right!important;
-}
+.stApp,.main,[data-testid="stSidebar"]{ direction:rtl; text-align:right; }
+label,.stMarkdown,.stText,.stCaption{ text-align:right!important; }
 
 /* הסתרת טיפ "Press Enter to apply" */
 *[title="Press Enter to apply"]{ display:none !important; }
 
-/* ====== כפתורי הורדה – סגנון "פיל" כמו בתמונה ====== */
+/* ====== כפתורי הורדה – סגנון "פיל" ====== */
 div.stDownloadButton{ direction:rtl; text-align:right; }
 div.stDownloadButton > button{
   border:1px solid rgba(15,23,42,.12)!important;
@@ -144,10 +131,7 @@ div.stDownloadButton > button:hover{
 }
 div.stDownloadButton > button.excel-like::after{
   content:"\\1F53D"; /* חץ למטה */
-  font-size:1.1rem;
-  line-height:1;
-  margin-inline-start:.35rem;
-  color:#1e88e5; /* כחול עדין */
+  font-size:1.1rem; line-height:1; margin-inline-start:.35rem; color:#1e88e5;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -156,7 +140,7 @@ div.stDownloadButton > button.excel-like::after{
 st.markdown("<h1>מערכת שיבוץ סטודנטים – התאמה חכמה</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align:center;color:#475569;margin-top:-8px;'>כאן משבצים סטודנטים למקומות התמחות בקלות, בהתבסס על תחום, עיר ובקשות.</p>", unsafe_allow_html=True)
 
-# ====== מודל ניקוד (ללא מרחק, ללא סליידרים) ======
+# ====== מודל ניקוד ======
 @dataclass
 class Weights:
     w_field: float = 0.70
@@ -265,25 +249,18 @@ def tokens(s: str) -> List[str]:
 def field_match_score(stu_pref: str, site_field: str) -> float:
     if not stu_pref: 
         return 50.0
-    sp = stu_pref.strip()
-    sf = site_field.strip()
-    if not sf:
-        return 40.0
-    if sp and sp in sf:
-        return 90.0
+    sp = stu_pref.strip(); sf = site_field.strip()
+    if not sf: return 40.0
+    if sp and sp in sf: return 90.0
     tp = set([w for w in tokens(sp) if len(w) > 1])
     tf = set([w for w in tokens(sf) if len(w) > 1])
-    if tp.intersection(tf):
-        return 75.0
+    if tp.intersection(tf): return 75.0
     return 45.0
 
 def special_req_score(req: str, site_type: str, same_city: bool) -> float:
-    if not req:
-        return 70.0
-    if "לא בבית חולים" in req and site_type == "בית חולים":
-        return 0.0
-    if "קרוב" in req:
-        return 90.0 if same_city else 55.0
+    if not req: return 70.0
+    if "לא בבית חולים" in req and site_type == "בית חולים": return 0.0
+    if "קרוב" in req: return 90.0 if same_city else 55.0
     return 75.0
 
 def compute_score(stu: pd.Series, site: pd.Series, W: Weights) -> float:
@@ -295,21 +272,16 @@ def compute_score(stu: pd.Series, site: pd.Series, W: Weights) -> float:
     return float(np.clip(score, 0, 100))
 
 def find_partner_map(students_df: pd.DataFrame) -> Dict[str,str]:
-    ids = set(students_df["stu_id"])
-    m = {}
+    ids = set(students_df["stu_id"]); m: Dict[str,str] = {}
     for _, r in students_df.iterrows():
-        sid = r["stu_id"]
-        pid = r.get("stu_partner","")
-        if not pid: 
-            continue
+        sid = r["stu_id"]; pid = r.get("stu_partner","")
+        if not pid: continue
         if pid in ids and pid != sid:
-            m[sid] = pid
-            continue
+            m[sid] = pid; continue
         for _, r2 in students_df.iterrows():
             full = f"{r2.get('stu_first','')} {r2.get('stu_last','')}".strip()
             if pid and full and pid in full and r2["stu_id"] != sid:
-                m[sid] = r2["stu_id"]
-                break
+                m[sid] = r2["stu_id"]; break
     return m
 
 def candidate_table_for_student(stu: pd.Series, sites_df: pd.DataFrame, W: Weights) -> pd.DataFrame:
@@ -318,17 +290,21 @@ def candidate_table_for_student(stu: pd.Series, sites_df: pd.DataFrame, W: Weigh
     return tmp.sort_values(["score"], ascending=[False])
 
 def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, W: Weights) -> pd.DataFrame:
+    """
+    מחזיר DataFrame של כל הסטודנטים. אם אין מקום/התאמה – הסטודנט יופיע כ'לא שובץ'.
+    לא מוחק/מסנן שום רשומה מהקבצים המקוריים.
+    """
     separate_couples = True
     top_k = 10
 
     def dec_cap(idx: int):
         sites_df.at[idx, "capacity_left"] = int(sites_df.at[idx, "capacity_left"]) - 1
 
-    results = []
+    results: List[Tuple[pd.Series, Optional[pd.Series]]] = []
     processed = set()
     partner_map = find_partner_map(students_df)
 
-    # Couples first
+    # בני/בנות זוג תחילה (אם אפשר לשבץ את שניהם)
     for _, s in students_df.iterrows():
         sid = s["stu_id"]
         if sid in processed: 
@@ -344,7 +320,7 @@ def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, W: Weights) 
             best = (-1.0, None, None)
             for i1, r1 in cand1.iterrows():
                 for i2, r2 in cand2.iterrows():
-                    if i1 == i2:
+                    if i1 == i2:  # לא אותו מקום לשניהם
                         continue
                     if separate_couples and r1.get("supervisor") and r1.get("supervisor") == r2.get("supervisor"):
                         continue
@@ -358,11 +334,12 @@ def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, W: Weights) 
                 results.append((s, rsite1))
                 results.append((s2, rsite2))
                 processed.add(sid); processed.add(pid)
+            # אם לא מצאנו שני מקומות – נעבור לשלב ה"בודדים" שיטפל בכל אחד בנפרד
 
-    # Singles
+    # בודדים וכל מי שלא שובץ עד עכשיו
     for _, s in students_df.iterrows():
         sid = s["stu_id"]
-        if sid in processed: 
+        if sid in processed:
             continue
         cand = candidate_table_for_student(s, sites_df[sites_df["capacity_left"]>0], W).head(top_k)
         if not cand.empty:
@@ -371,28 +348,51 @@ def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, W: Weights) 
             dec_cap(chosen_idx)
             results.append((s, rsite))
             processed.add(sid)
+        else:
+            # אין מקום זמין/התאמה – הוסף כרשומה "לא שובץ"
+            results.append((s, None))
+            processed.add(sid)
 
+    # בניית טבלת פלט – כל הסטודנטים יופיעו
     rows = []
     for s, r in results:
-        score = compute_score(s, r, W)
-        rows.append({
-            "ת\"ז הסטודנט": s.get("stu_id"),
-            "שם פרטי": s.get("stu_first"),
-            "שם משפחה": s.get("stu_last"),
-            "כתובת": s.get("stu_address"),
-            "עיר": s.get("stu_city"),
-            "מספר טלפון": s.get("stu_phone"),
-            "אימייל": s.get("stu_email"),
-            "אחוז התאמה": round(score, 1),
-            "שם מקום ההתמחות": r.get("site_name"),
-            "עיר המוסד": r.get("site_city"),
-            "סוג מקום השיבוץ": r.get("site_type"),
-            "תחום ההתמחות במוסד": r.get("site_field"),
-        })
+        if r is None:
+            rows.append({
+                "ת\"ז הסטודנט": s.get("stu_id"),
+                "שם פרטי": s.get("stu_first"),
+                "שם משפחה": s.get("stu_last"),
+                "כתובת": s.get("stu_address"),
+                "עיר": s.get("stu_city"),
+                "מספר טלפון": s.get("stu_phone"),
+                "אימייל": s.get("stu_email"),
+                "אחוז התאמה": 0.0,
+                "שם מקום ההתמחות": "לא שובץ",
+                "עיר המוסד": "",
+                "סוג מקום השיבוץ": "",
+                "תחום ההתמחות במוסד": "",
+            })
+        else:
+            score = compute_score(s, r, W)
+            rows.append({
+                "ת\"ז הסטודנט": s.get("stu_id"),
+                "שם פרטי": s.get("stu_first"),
+                "שם משפחה": s.get("stu_last"),
+                "כתובת": s.get("stu_address"),
+                "עיר": s.get("stu_city"),
+                "מספר טלפון": s.get("stu_phone"),
+                "אימייל": s.get("stu_email"),
+                "אחוז התאמה": round(score, 1),
+                "שם מקום ההתמחות": r.get("site_name"),
+                "עיר המוסד": r.get("site_city"),
+                "סוג מקום השיבוץ": r.get("site_type"),
+                "תחום ההתמחות במוסד": r.get("site_field"),
+            })
     out = pd.DataFrame(rows)
     desired = ["ת\"ז הסטודנט","שם פרטי","שם משפחה","כתובת","עיר","מספר טלפון","אימייל",
                "אחוז התאמה","שם מקום ההתמחות","עיר המוסד","סוג מקום השיבוץ","תחום ההתמחות במוסד"]
-    return out[[c for c in desired if c in out.columns]]
+    # שומרות את הסדר, אבל לא מוחקות עמודות מקוריות: מציגות את הרצויות למעלה וממזגות את השאר
+    remaining = [c for c in out.columns if c not in desired]
+    return out[[c for c in desired if c in out.columns] + remaining]
 
 W = Weights()
 
@@ -404,7 +404,7 @@ st.markdown("""
 2. **קובץ אתרים/מדריכים (CSV/XLSX):** מוסד/שירות, תחום התמחות, רחוב, עיר, מספר סטודנטים שניתן לקלוט השנה.  
    אופציונלי: שם פרטי+שם משפחה של המדריך, טלפון, אימייל.
 3. לחיצה על **בצע שיבוץ** תחשב *אחוז התאמה* לפי תחום (70%), עיר (20%), בקשות (10%), כולל הפרדת בני/בנות זוג ואכיפת קיבולת.
-4. בסוף ניתן להוריד את קובץ התוצאות.
+4. בסוף ניתן להוריד את קובץ התוצאות (CSV/XLSX).
 """)
 
 # ====== 2) דוגמה לשימוש ======
@@ -437,7 +437,7 @@ colA, colB = st.columns(2, gap="large")
 with colA:
     students_file = st.file_uploader("קובץ סטודנטים", type=["csv","xlsx","xls"], key="students_file")
     if students_file is not None:
-        st.caption("הצצה ל-5 הרשומות הראשונות:")
+        st.caption("הצצה ל-5 הרשומות הראשונות (לא מוחקים שום עמודה):")
         try:
             df_students_raw = read_any(students_file)
             st.dataframe(df_students_raw.head(5), use_container_width=True)
@@ -450,7 +450,7 @@ with colA:
 with colB:
     sites_file = st.file_uploader("קובץ אתרי התמחות/מדריכים", type=["csv","xlsx","xls"], key="sites_file")
     if sites_file is not None:
-        st.caption("הצצה ל-5 הרשומות הראשונות:")
+        st.caption("הצצה ל-5 הרשומות הראשונות (לא מוחקים שום עמודה):")
         try:
             df_sites_raw = read_any(sites_file)
             st.dataframe(df_sites_raw.head(5), use_container_width=True)
@@ -470,9 +470,7 @@ if run_btn:
         st.error("נא להעלות את שני הקבצים לפני הפעלת השיבוץ.")
     else:
         try:
-            for df in (df_students_raw, df_sites_raw):
-                drop_cols = [c for c in df.columns if str(c).startswith("Unnamed")]
-                df.drop(columns=drop_cols, inplace=True, errors="ignore")
+            # שימי לב: לא מוחקים שום עמודה (גם לא Unnamed)
             students = resolve_students(df_students_raw)
             sites = resolve_sites(df_sites_raw)
             result_df = greedy_match(students, sites, W)
@@ -485,7 +483,7 @@ st.markdown("## 📊 תוצאות השיבוץ")
 if 'result_df' in locals() and result_df is not None and not result_df.empty:
     st.dataframe(result_df, use_container_width=True)
 
-    # CSV (אופציונלי)
+    # CSV
     csv_bytes = result_df.to_csv(index=False, encoding="utf-8-sig")
     st.download_button(
         "⬇️ הורדת קובץ התוצאות (CSV)",
@@ -499,30 +497,26 @@ if 'result_df' in locals() and result_df is not None and not result_df.empty:
     xlsx_io = BytesIO()
     with pd.ExcelWriter(xlsx_io, engine="xlsxwriter") as writer:
         result_df.to_excel(writer, index=False, sheet_name="שיבוץ")
-        wbk  = writer.book
         sht  = writer.sheets["שיבוץ"]
         for i, col in enumerate(result_df.columns):
             width = max(12, min(40, int(result_df[col].astype(str).map(len).max() if not result_df.empty else 12) + 2))
             sht.set_column(i, i, width)
     xlsx_io.seek(0)
 
-    # הוספת class “excel-like” לכפתור באמצעות help (טריק קטן)
     st.download_button(
         label="הורדת Excel (XLSX)",
         data=xlsx_io.getvalue(),
         file_name="student_site_matching.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         key="dl_xlsx",
-        help="excel-like"  # מאפשר לנו למקד את הסלקטור ::after ב-CSS
+        help="excel-like"  # נשתמש כדי לצבוע את הכפתור באייקון דרך CSS
     )
 
-    # הזרקת JS קטנה להוספת המחלקה לכפתור ההורדה (כדי שיקבל את האייקון מה-CSS)
+    # הוספת class ל"כפתור האקסל" כדי לקבל את האייקון מה-CSS
     st.markdown("""
     <script>
     const btns = parent.document.querySelectorAll('div.stDownloadButton > button');
-    btns.forEach(b=>{
-      if(b.title && b.title.includes('excel-like')){ b.classList.add('excel-like'); }
-    });
+    btns.forEach(b=>{ if(b.title && b.title.includes('excel-like')) b.classList.add('excel-like'); });
     </script>
     """, unsafe_allow_html=True)
 
