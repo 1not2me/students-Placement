@@ -1,5 +1,5 @@
 
-# matcher_streamlit_beauty.py
+# matcher_streamlit_beauty_v2.py
 # -*- coding: utf-8 -*-
 import streamlit as st
 import pandas as pd
@@ -7,88 +7,132 @@ import numpy as np
 from dataclasses import dataclass
 from typing import Optional, Dict, Any, List
 
-# ===================== Page & Global Style =====================
 st.set_page_config(page_title="מערכת שיבוץ סטודנטים – התאמה חכמה", layout="wide")
 
+# ====== CSS (exactly as user requested) ======
+# Note: the @font-face URL is a placeholder. Replace with a valid font URL if needed.
 st.markdown("""
 <style>
-:root{
-  --ink:#0f172a;
-  --muted:#475569;
-  --brand:#6366f1;
-  --card:rgba(255,255,255,.86);
-  --ring:rgba(99,102,241,.25);
-  --ok:#16a34a;
-  --warn:#f59e0b;
-  --bad:#ef4444;
+@font-face {
+  font-family:'David';
+  src:url('https://example.com/David.ttf') format('truetype');
+}
+html, body, [class*="css"] {
+  font-family:'David',sans-serif!important;
 }
 
-html, body, [class*="css"]{ font-family: system-ui, "Segoe UI", Arial; }
-.stApp, .main{ direction:rtl; text-align:right; }
+/* ====== עיצוב מודרני + RTL ====== */
+:root{
+  --bg-1:#e0f7fa;
+  --bg-2:#ede7f6;
+  --bg-3:#fff3e0;
+  --bg-4:#fce4ec;
+  --bg-5:#e8f5e9;
+  --ink:#0f172a;
+  --primary:#9b5de5;
+  --primary-700:#f15bb5;
+  --ring:rgba(155,93,229,.35);
+}
 
-/* Background (soft gradients) */
 [data-testid="stAppViewContainer"]{
   background:
-    radial-gradient(1100px 500px at 8% 8%, #e0f7fa 0%, transparent 65%),
-    radial-gradient(900px 450px at 92% 12%, #ede7f6 0%, transparent 60%),
-    radial-gradient(900px 480px at 20% 90%, #fff3e0 0%, transparent 55%);
-}
-.block-container{ padding-top:1.0rem; }
-
-/* Hero */
-.hero{
-  max-width:1000px; margin:20px auto 10px auto; padding:24px 28px;
-  background:linear-gradient(135deg, rgba(255,255,255,.88), rgba(255,255,255,.78));
-  border:1px solid #e5e7eb; border-radius:22px;
-  box-shadow:0 18px 50px rgba(2,6,23,.06);
-}
-.hero h1{ margin:0 0 6px 0; color:var(--ink); font-size:2.0rem; }
-.hero p{ margin:0; color:var(--muted); }
-
-/* Section cards */
-.section{
-  max-width:1100px; margin:20px auto; padding:22px 22px;
-  background:var(--card);
-  border:1px solid #e6e9f2; border-radius:18px;
-  box-shadow:0 14px 36px rgba(2,6,23,.07);
-}
-.section h3{ margin-top:0; color:var(--ink); }
-.section .muted{ color:var(--muted); }
-
-/* Upload form */
-.upload-card{ padding:10px 14px; border-radius:14px; border:1px dashed #d1d5db; background:rgba(255,255,255,.65); }
-.stButton>button{
-  border-radius:12px; padding:.6rem 1rem;
-  box-shadow:0 10px 20px rgba(99,102,241,.20);
+    radial-gradient(1200px 600px at 15% 10%, var(--bg-2) 0%, transparent 70%),
+    radial-gradient(1000px 700px at 85% 20%, var(--bg-3) 0%, transparent 70%),
+    radial-gradient(900px 500px at 50% 80%, var(--bg-4) 0%, transparent 70%),
+    radial-gradient(700px 400px at 10% 85%, var(--bg-5) 0%, transparent 70%),
+    linear-gradient(135deg, var(--bg-1) 0%, #ffffff 100%) !important;
+  color: var(--ink);
 }
 
-/* Tables spacing */
-[data-testid="stHorizontalBlock"]{ gap:1.2rem; }
+.main .block-container{
+  background: rgba(255,255,255,.78);
+  backdrop-filter: blur(10px);
+  border:1px solid rgba(15,23,42,.08);
+  box-shadow:0 15px 35px rgba(15,23,42,.08);
+  border-radius:24px;
+  padding:2.5rem;
+  margin-top:1rem;
+}
 
-/* Pills / labels */
-.pill{ display:inline-block; padding:.25rem .6rem; border-radius:999px; background:#eef2ff; color:#3730a3; font-size:.85rem; }
+/* כותרות */
+h1,h2,h3,.stMarkdown h1,.stMarkdown h2{
+  text-align:center;
+  letter-spacing:.5px;
+  text-shadow:0 1px 2px rgba(255,255,255,.7);
+  font-weight:700;
+  color:#222;
+  margin-bottom:1rem;
+}
 
-/* Headings */
-h2.section-title{ display:flex; align-items:center; gap:.5rem; color:#111827; margin:0 0 .75rem 0; }
-h2.section-title .emoji{ font-size:1.25rem; }
+/* כפתור */
+.stButton > button{
+  background:linear-gradient(135deg,var(--primary) 0%,var(--primary-700) 100%)!important;
+  color:#fff!important;
+  border:none!important;
+  border-radius:18px!important;
+  padding:1rem 2rem!important;
+  font-size:1.1rem!important;
+  font-weight:600!important;
+  box-shadow:0 8px 18px var(--ring)!important;
+  transition:all .15s ease!important;
+}
+.stButton > button:hover{
+  transform:translateY(-3px) scale(1.02);
+  filter:brightness(1.08);
+}
+.stButton > button:focus{
+  outline:none!important;
+  box-shadow:0 0 0 4px var(--ring)!important;
+}
+
+/* קלטים */
+div.stSelectbox > div,
+div.stMultiSelect > div,
+.stTextInput > div > div > input{
+  border-radius:14px!important;
+  border:1px solid rgba(15,23,42,.12)!important;
+  box-shadow:0 3px 10px rgba(15,23,42,.04)!important;
+  padding:.6rem .8rem!important;
+  color:var(--ink)!important;
+  font-size:1rem!important;
+}
+
+/* טאבים – רוחב קטן יותר */
+.stTabs [data-baseweb="tab"]{
+  border-radius:14px!important;
+  background:rgba(255,255,255,.65);
+  margin-inline-start:.3rem;
+  padding:.4rem .8rem;
+  font-weight:600;
+  min-width: 110px !important;   /* במקום 160px */
+  text-align:center;
+  font-size:0.9rem !important;   /* טקסט קטן יותר */
+}
+
+.stTabs [data-baseweb="tab"]:hover{
+  background:rgba(255,255,255,.9);
+}
+
+/* RTL */
+.stApp,.main,[data-testid="stSidebar"]{
+  direction:rtl;
+  text-align:right;
+}
+label,.stMarkdown,.stText,.stCaption{
+  text-align:right!important;
+}
+
+/* הסתרת "Press Enter to apply" ככל האפשר */
+[data-testid="stFormStatus"], .stTooltipContent, div:has(> .st-key-PressEnterToApply) { display:none !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# ===================== Hero =====================
-st.markdown("""
-<div class="hero">
-  <h1>🏷️ מערכת שיבוץ סטודנטים – התאמה חכמה</h1>
-  <p>העלו שני קבצים (סטודנטים ואתרי התמחות), בצעו שיבוץ אוטומטי – פשוט, מסודר ואלגנטי.</p>
-</div>
-""", unsafe_allow_html=True)
-
-# ===================== Data & Logic =====================
+# ====== Logic (no distance controls; fixed weights) ======
 @dataclass
 class Weights:
-    # קבועים – אין סליידרים או פרמטרים במסך
-    w_field: float = 0.70    # התאמה לתחום
-    w_city: float = 0.20     # התאמת עיר
-    w_special: float = 0.10  # בקשות מיוחדות
+    w_field: float = 0.70
+    w_city: float = 0.20
+    w_special: float = 0.10
 
 STU_COLS = {
     "id": ["מספר תעודת זהות", "תעודת זהות", "ת\"ז", "תז", "תעודת זהות הסטודנט"],
@@ -325,62 +369,49 @@ def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, W: Weights) 
 
 W = Weights()
 
-# ===================== 1) הוראות שימוש =====================
+# ====== Sections in the requested order ======
+st.markdown("# מערכת שיבוץ סטודנטים – התאמה חכמה")
+st.markdown("מערכת נקייה ומודרנית לעיבוד קבצי סטודנטים ואתרי התמחות ושיבוץ חכם – ללא פרמטרים מסובכים.")
+
+# 1) הוראות שימוש
+st.subheader("📘 הוראות שימוש")
 st.markdown("""
-<div class="section">
-  <h2 class="section-title"><span class="emoji">📘</span> הוראות שימוש</h2>
-  <ol>
-    <li>הכינו <b>קובץ סטודנטים</b> (CSV/XLSX) עם: שם פרטי, שם משפחה, תעודת זהות, כתובת/עיר, טלפון, אימייל. אופציונלי: תחום מועדף, בקשה מיוחדת, בן/בת זוג להכשרה.</li>
-    <li>הכינו <b>קובץ אתרי התמחות/מדריכים</b> (CSV/XLSX) עם: מוסד/שירות, תחום התמחות, רחוב, עיר, מספר סטודנטים שניתן לקלוט השנה. אופציונלי: שם פרטי+שם משפחה של המדריך, טלפון, אימייל.</li>
-    <li>לחצו על <b>בצע שיבוץ</b>. אחוז ההתאמה מחושב לפי התאמת תחום (70%), התאמת עיר (20%) ובקשות מיוחדות (10%), כולל הפרדת בני/בנות זוג ואכיפת קיבולת.</li>
-    <li>בסיום, הורידו את קובץ התוצאות בלחיצה על כפתור ההורדה.</li>
-  </ol>
-  <div class="muted">הערה: העמוד מזהה אוטומטית וריאציות נפוצות לשמות העמודות בעברית.</div>
-</div>
-""", unsafe_allow_html=True)
+1. הכינו **קובץ סטודנטים** (CSV/XLSX): שם פרטי, שם משפחה, תעודת זהות, כתובת/עיר, טלפון, אימייל. (אופציונלי: תחום מועדף, בקשה מיוחדת, בן/בת זוג להכשרה).  
+2. הכינו **קובץ אתרי התמחות/מדריכים** (CSV/XLSX): מוסד/שירות, תחום התמחות, רחוב, עיר, מספר סטודנטים שניתן לקלוט השנה. (אופציונלי: שם פרטי+שם משפחה של המדריך, טלפון, אימייל).  
+3. לחצו **בצע שיבוץ**. האלגוריתם מחשב אחוז התאמה לפי תחום (70%), עיר (20%) ובקשות מיוחדות (10%), כולל קיבולת והפרדת בני/בנות זוג.  
+4. הורידו את קובץ התוצאות.
+""")
 
-# ===================== 2) העלאת קבצים =====================
-with st.container():
-    st.markdown("""
-    <div class="section">
-      <h2 class="section-title"><span class="emoji">📤</span> העלאת קבצים</h2>
-      <div class="upload-card">
-        העלו קובץ סטודנטים וקובץ אתרי התמחות (CSV, XLSX, XLS).
-      </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    colA, colB = st.columns(2, gap="large")
-    with colA:
-        students_file = st.file_uploader("קובץ סטודנטים", type=["csv","xlsx","xls"], key="students_file")
-        if students_file is not None:
-            st.caption("הצצה ל-5 הרשומות הראשונות:")
-            try:
-                df_students_raw = read_any(students_file)
-                df_students_raw_preview = df_students_raw.head(5)
-                st.dataframe(df_students_raw_preview, use_container_width=True)
-            except Exception as e:
-                st.error("לא ניתן לקרוא את הקובץ. ודאו שהוא CSV/XLSX תקין.")
-                df_students_raw = None
-        else:
+# 2) העלאת קבצים
+st.subheader("📤 העלאת קבצים")
+colA, colB = st.columns(2, gap="large")
+with colA:
+    students_file = st.file_uploader("קובץ סטודנטים", type=["csv","xlsx","xls"], key="students_file")
+    if students_file is not None:
+        st.caption("הצצה ל-5 הרשומות הראשונות:")
+        try:
+            df_students_raw = read_any(students_file)
+            st.dataframe(df_students_raw.head(5), use_container_width=True)
+        except Exception:
+            st.error("לא ניתן לקרוא את הקובץ. ודאו שהוא CSV/XLSX תקין.")
             df_students_raw = None
-
-    with colB:
-        sites_file = st.file_uploader("קובץ אתרי התמחות/מדריכים", type=["csv","xlsx","xls"], key="sites_file")
-        if sites_file is not None:
-            st.caption("הצצה ל-5 הרשומות הראשונות:")
-            try:
-                df_sites_raw = read_any(sites_file)
-                df_sites_raw_preview = df_sites_raw.head(5)
-                st.dataframe(df_sites_raw_preview, use_container_width=True)
-            except Exception as e:
-                st.error("לא ניתן לקרוא את הקובץ. ודאו שהוא CSV/XLSX תקין.")
-                df_sites_raw = None
-        else:
+    else:
+        df_students_raw = None
+with colB:
+    sites_file = st.file_uploader("קובץ אתרי התמחות/מדריכים", type=["csv","xlsx","xls"], key="sites_file")
+    if sites_file is not None:
+        st.caption("הצצה ל-5 הרשומות הראשונות:")
+        try:
+            df_sites_raw = read_any(sites_file)
+            st.dataframe(df_sites_raw.head(5), use_container_width=True)
+        except Exception:
+            st.error("לא ניתן לקרוא את הקובץ. ודאו שהוא CSV/XLSX תקין.")
             df_sites_raw = None
+    else:
+        df_sites_raw = None
 
-# ===================== 3) דוגמה לשימוש =====================
-# Small built-in example tables for visual guidance (not used for matching)
+# 3) דוגמה לשימוש
+st.subheader("🧪 דוגמה לשימוש")
 example_students = pd.DataFrame([
     {"שם פרטי":"רות", "שם משפחה":"כהן", "תעודת זהות":"123456789", "כתובת":"הרצל 12", "עיר מגורים":"תל אביב", "טלפון":"0501111111", "דוא\"ל":"ruth@example.com", "תחום מועדף":"בריאות הנפש"},
     {"שם פרטי":"יואב", "שם משפחה":"לוי", "תעודת זהות":"987654321", "כתובת":"דיזנגוף 80", "עיר מגורים":"תל אביב", "טלפון":"0502222222", "דוא\"ל":"yoav@example.com", "תחום מועדף":"רווחה"}
@@ -389,36 +420,16 @@ example_sites = pd.DataFrame([
     {"מוסד / שירות הכשרה":"מרכז חוסן תל אביב", "תחום ההתמחות":"בריאות הנפש", "רחוב":"אבן גבירול 1", "עיר":"תל אביב", "מספר סטודנטים שניתן לקלוט השנה":2},
     {"מוסד / שירות הכשרה":"מחלקת רווחה רמת גן", "תחום ההתמחות":"רווחה", "רחוב":"ביאליק 10", "עיר":"רמת גן", "מספר סטודנטים שניתן לקלוט השנה":1},
 ])
-
-st.markdown("""
-<div class="section">
-  <h2 class="section-title"><span class="emoji">🧪</span> דוגמה לשימוש</h2>
-  <div class="muted">כך נראים קבצים בסכימה מומלצת. ניתן להוריד ולמלא כבסיס.</div>
-</div>
-""", unsafe_allow_html=True)
-
 colX, colY = st.columns(2, gap="large")
 with colX:
     st.write("**דוגמה – סטודנטים**")
     st.dataframe(example_students, use_container_width=True)
-    st.download_button("⬇️ הורדת דוגמת סטודנטים (CSV)",
-                       data=example_students.to_csv(index=False, encoding="utf-8-sig"),
-                       file_name="students_example.csv", mime="text/csv")
 with colY:
     st.write("**דוגמה – אתרי התמחות/מדריכים**")
     st.dataframe(example_sites, use_container_width=True)
-    st.download_button("⬇️ הורדת דוגמת אתרים (CSV)",
-                       data=example_sites.to_csv(index=False, encoding="utf-8-sig"),
-                       file_name="sites_example.csv", mime="text/csv")
 
-# ===================== 4) שיבוץ =====================
-st.markdown("""
-<div class="section">
-  <h2 class="section-title"><span class="emoji">⚙️</span> ביצוע השיבוץ</h2>
-  <div class="muted">השיבוץ מתחשב בתחום, בעיר, בבקשות מיוחדות, בקיבולת ובבני/בנות זוג. לחצו להפעלה.</div>
-</div>
-""", unsafe_allow_html=True)
-
+# 4) שיבוץ
+st.subheader("⚙️ ביצוע השיבוץ")
 run_btn = st.button("🚀 בצע שיבוץ", use_container_width=True)
 
 result_df = None
@@ -427,7 +438,6 @@ if run_btn:
         st.error("נא להעלות את שני הקבצים לפני הפעלת השיבוץ.")
     else:
         try:
-            # Clean + resolve
             for df in (df_students_raw, df_sites_raw):
                 drop_cols = [c for c in df.columns if str(c).startswith("Unnamed")]
                 df.drop(columns=drop_cols, inplace=True, errors="ignore")
@@ -438,13 +448,8 @@ if run_btn:
         except Exception as e:
             st.exception(e)
 
-# ===================== 5) תוצאות השיבוץ =====================
-st.markdown("""
-<div class="section">
-  <h2 class="section-title"><span class="emoji">📊</span> תוצאות השיבוץ</h2>
-</div>
-""", unsafe_allow_html=True)
-
+# 5) תוצאות השיבוץ
+st.subheader("📊 תוצאות השיבוץ")
 if result_df is not None and not result_df.empty:
     st.dataframe(result_df, use_container_width=True)
     csv = result_df.to_csv(index=False, encoding="utf-8-sig")
