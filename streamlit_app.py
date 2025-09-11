@@ -1,4 +1,5 @@
-# streamlit_app.py
+
+# streamlit_app.py (Auto-match, no manual mapping/choices)
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -6,64 +7,74 @@ from math import radians, sin, cos, atan2, sqrt
 from pathlib import Path
 
 # =========================
-# הגדרות כלליות + עיצוב
+# General + Modern Styling
 # =========================
-st.set_page_config(page_title="מנגנון שיבוץ סטודנטים", layout="wide")
+st.set_page_config(page_title="מערכת שיבוץ סטודנטים – אוטומטי", layout="wide")
 
 st.markdown(r"""
 <style>
 :root{
-  --ink:#0f172a; 
-  --muted:#475569; 
-  --ring:rgba(99,102,241,.25); 
-  --card:rgba(255,255,255,.85);
+  --ink:#0f172a;
+  --muted:#64748b;
+  --ring:rgba(56,189,248,.25);
+  --card:rgba(255,255,255,.90);
+  --grad1:#e0f2fe; /* blue-100 */
+  --grad2:#f1f5f9; /* slate-100 */
+  --grad3:#fae8ff; /* fuchsia-100 */
 }
 
-/* RTL + פונטים */
-html, body, [class*="css"] { font-family: system-ui, "Segoe UI", Arial; }
+/* RTL + clean typography */
+html, body, [class*="css"] { font-family: "Segoe UI", system-ui, -apple-system, Arial; }
 .stApp, .main, [data-testid="stSidebar"]{ direction:rtl; text-align:right; }
 
-/* רקע */
+/* background */
 [data-testid="stAppViewContainer"]{
   background:
-    radial-gradient(1200px 600px at 8% 8%, #e0f7fa 0%, transparent 65%),
-    radial-gradient(1000px 500px at 92% 12%, #ede7f6 0%, transparent 60%),
-    radial-gradient(900px 500px at 20% 90%, #fff3e0 0%, transparent 55%);
+    radial-gradient(1200px 600px at 8% 8%, var(--grad1) 0%, transparent 65%),
+    radial-gradient(1000px 500px at 92% 12%, var(--grad3) 0%, transparent 60%),
+    radial-gradient(900px 500px at 20% 90%, var(--grad2) 0%, transparent 55%);
 }
-.block-container{ padding-top:1.1rem; }
+.block-container{ padding-top:1.2rem; }
 
-/* כרטיס/טופס */
-[data-testid="stForm"], .st-emotion-cache-ue6h4q, .st-emotion-cache-0{
+/* card */
+.section{
   background:var(--card);
   border:1px solid #e2e8f0;
-  border-radius:16px;
+  border-radius:18px;
   padding:18px 20px;
-  box-shadow:0 8px 24px rgba(2,6,23,.06);
+  box-shadow:0 10px 28px rgba(2,6,23,.06);
+  margin-bottom:18px;
 }
 
-/* תוויות + נקודתיים מימין */
-[data-testid="stWidgetLabel"] p{
-  text-align:right; 
-  margin-bottom:.25rem; 
-  color:var(--muted); 
-}
-[data-testid="stWidgetLabel"] p::after{
-  content: " :";
-}
+/* tables */
+[data-baseweb="table"]{ border-radius:14px; overflow:hidden; }
+thead th { background:#f8fafc !important; color:#0f172a !important; }
 
-/* שדות */
-input, textarea, select{ direction:rtl; text-align:right; }
+/* labels */
+small.hint{ color:var(--muted); }
+hr.sep{ border:none; border-top:1px solid #e2e8f0; margin:14px 0; }
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🧭 מנגנון שיבוץ סטודנטים להתמחויות")
-st.caption("שיבוץ אוטומטי המתחשב במרחק, קיבולת, והפרדה בין בני/ות זוג (לא אותו מדריך/אתר).")
+st.markdown('<div class="section">', unsafe_allow_html=True)
+st.title("🧭 מערכת שיבוץ סטודנטים – אוטומטי")
+st.caption("שיבוץ מלא ללא בחירות ידניות – לפי נתוני הסטודנטים והאתרים, עם הפרדת בני/בנות זוג, כיבוד קיבולות וחישוב מרחק (אם קיימות קואורדינטות).")
+st.markdown('</div>', unsafe_allow_html=True)
 
 # =========================
-# עזר: פונקציות
+# Constants & defaults
+# =========================
+DEFAULT_STUDENTS = "/mnt/data/2025-09-11T17-20_export.csv"
+DEFAULT_SITES    = "/mnt/data/2025-09-11T17-21_export.csv"
+
+W_DISTANCE = 0.85         # weight for distance in score (0..1)
+SEP_PARTNERS = True       # separate couples across site/supervisor
+ENFORCE_CAPACITY = True   # respect capacity
+
+# =========================
+# Helpers
 # =========================
 def haversine_km(lat1, lon1, lat2, lon2):
-    """מרחק קו אווירי בק\"מ בין שתי נקודות (lat/lon)"""
     if pd.isna(lat1) or pd.isna(lon1) or pd.isna(lat2) or pd.isna(lon2):
         return np.nan
     R = 6371.0
@@ -71,17 +82,16 @@ def haversine_km(lat1, lon1, lat2, lon2):
     dphi = radians(lat2 - lat1)
     dlambda = radians(lon2 - lon1)
     a = sin(dphi/2.0)**2 + cos(phi1)*cos(phi2)*sin(dlambda/2.0)**2
-    c = 2 * atan2(sqrt(a), sqrt(1-a))
+    c = 2 * atan2(np.sqrt(a), np.sqrt(1-a))
     return R * c
 
 def normalize_series(s: pd.Series):
-    s = s.astype(float)
+    s = pd.to_numeric(s, errors="coerce")
     if s.max(skipna=True) == s.min(skipna=True):
         return pd.Series(np.zeros(len(s)), index=s.index)
     return (s - s.min(skipna=True)) / (s.max(skipna=True) - s.min(skipna=True))
 
 def guess_column(cols, patterns):
-    """ניחוש שם עמודה לפי רשימת תבניות (lower)"""
     cl = {c: c.lower() for c in cols}
     for p in patterns:
         for c, lc in cl.items():
@@ -89,126 +99,85 @@ def guess_column(cols, patterns):
                 return c
     return None
 
-# =========================
-# טעינת קבצים
-# =========================
-LEFT, RIGHT = st.columns([1,1])
-
-DEFAULT_STUDENTS = "/mnt/data/2025-09-11T17-20_export.csv"
-DEFAULT_SITES    = "/mnt/data/2025-09-11T17-21_export.csv"
-
-with LEFT:
-    st.subheader("📥 קובץ הסטודנטים")
-    use_defaults = st.checkbox("להשתמש בקבצים כברירת מחדל (אם קיימים בשרת)", value=True)
-    stud_file = st.file_uploader("בחרי CSV של סטודנטים", type=["csv"], key="stud_csv")
-    if use_defaults and stud_file is None and Path(DEFAULT_STUDENTS).exists():
-        st.info("נטען קובץ הסטודנטים מברירת המחדל.")
+def load_csv_auto():
+    """Load students & sites automatically from default paths if exist, otherwise try to read uploads silently."""
+    stud_df = None
+    site_df = None
+    if Path(DEFAULT_STUDENTS).exists():
         stud_df = pd.read_csv(DEFAULT_STUDENTS)
-    elif stud_file is not None:
-        stud_df = pd.read_csv(stud_file)
-    else:
-        stud_df = None
-
-with RIGHT:
-    st.subheader("🏥 קובץ אתרי השיבוץ")
-    site_file = st.file_uploader("בחרי CSV של אתרי שיבוץ", type=["csv"], key="site_csv")
-    if use_defaults and site_file is None and Path(DEFAULT_SITES).exists():
-        st.info("נטען קובץ האתרים מברירת המחדל.")
+    if Path(DEFAULT_SITES).exists():
         site_df = pd.read_csv(DEFAULT_SITES)
-    elif site_file is not None:
-        site_df = pd.read_csv(site_file)
+    return stud_df, site_df
+
+# =========================
+# Load data (no choices)
+# =========================
+stud_df, site_df = load_csv_auto()
+
+# As a fallback, allow drag&drop without extra UI noise
+c1, c2 = st.columns(2)
+with c1:
+    st.markdown('<div class="section">', unsafe_allow_html=True)
+    st.subheader("📥 קובץ סטודנטים (CSV)")
+    if stud_df is None:
+        f = st.file_uploader("ניתן לגרור לכאן את קובץ הסטודנטים", type=["csv"], key="stud")
+        if f is not None:
+            stud_df = pd.read_csv(f)
     else:
-        site_df = None
+        st.success("נטען אוטומטית מקובץ ברירת המחדל.")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+with c2:
+    st.markdown('<div class="section">', unsafe_allow_html=True)
+    st.subheader("🏥 קובץ אתרי שיבוץ (CSV)")
+    if site_df is None:
+        f = st.file_uploader("ניתן לגרור לכאן את קובץ האתרים", type=["csv"], key="site")
+        if f is not None:
+            site_df = pd.read_csv(f)
+    else:
+        st.success("נטען אוטומטית מקובץ ברירת המחדל.")
+    st.markdown('</div>', unsafe_allow_html=True)
 
 if stud_df is None or site_df is None:
-    st.warning("יש להעלות שני קבצים (סטודנטים + אתרים) או להפעיל ברירת מחדל אם זמינה.")
+    st.error("חסר קובץ אחד לפחות. ודאי שהקבצים קיימים בנתיב ברירת מחדל או גררי אותם לכאן.")
     st.stop()
 
-st.success("הקבצים נטענו בהצלחה.")
-
-with st.expander("📄 הצצה לנתונים (5 שורות ראשונות)"):
-    st.write("סטודנטים")
-    st.dataframe(stud_df.head())
-    st.write("אתרים")
-    st.dataframe(site_df.head())
-
 # =========================
-# מיפוי עמודות (כדי להתאים לשמות שלכם)
+# Column detection (no manual mapping)
 # =========================
-st.subheader("🧩 מיפוי עמודות")
-
 stud_cols = list(stud_df.columns)
 site_cols = list(site_df.columns)
 
-# ניחושים לשמות
-stud_id_guess  = guess_column(stud_cols, ["id", "תז", "ת.ז", "זהות"])
-first_guess    = guess_column(stud_cols, ["first", "שם פרטי", "פרטי"])
-last_guess     = guess_column(stud_cols, ["last", "family", "שם משפ", "משפחה"])
-city_guess     = guess_column(stud_cols, ["city", "יישוב", "עיר", "מגורים"])
-phone_guess    = guess_column(stud_cols, ["phone", "טל", "נייד"])
-mail_guess     = guess_column(stud_cols, ["mail", "email", "אימייל", "דוא", "דוא\"ל"])
-lat_guess      = guess_column(stud_cols, ["lat", "latitude", "קו רוחב"])
-lon_guess      = guess_column(stud_cols, ["lon", "lng", "longitude", "קו אורך"])
-partner_guess  = guess_column(stud_cols, ["partner", "בן זוג", "בת זוג", "זוגיות", "couple"])
-reason_guess   = guess_column(stud_cols, ["reason", "סיבה", "בקשה", "התחשבות"])
+# Students
+stud_id_col  = guess_column(stud_cols, ["id", "תז", "ת.ז", "זהות", "student id"])
+first_col    = guess_column(stud_cols, ["first", "שם פרטי", "פרטי"])
+last_col     = guess_column(stud_cols, ["last", "family", "שם משפ", "משפחה"])
+city_col     = guess_column(stud_cols, ["city", "יישוב", "עיר", "מגורים"])
+phone_col    = guess_column(stud_cols, ["phone", "טל", "נייד"])
+mail_col     = guess_column(stud_cols, ["mail", "email", "אימייל", "דוא", "דוא\"ל"])
+s_lat_col    = guess_column(stud_cols, ["lat", "latitude", "קו רוחב"])
+s_lon_col    = guess_column(stud_cols, ["lon", "lng", "longitude", "קו אורך"])
+partner_col  = guess_column(stud_cols, ["partner", "בן זוג", "בת זוג", "זוגיות", "couple", "spouse"])
+reason_col   = guess_column(stud_cols, ["reason", "סיבה", "בקשה", "התחשבות", "עדיפות"])
 
-site_name_guess = guess_column(site_cols, ["שם אתר", "שם מקום", "site", "מקום", "ארגון"])
-site_city_guess = guess_column(site_cols, ["city", "יישוב", "עיר", "מיקום"])
-site_zip_guess  = guess_column(site_cols, ["zip", "מיקוד"])
-site_type_guess = guess_column(site_cols, ["type", "סוג", "קטגוריה"])
-site_sup_guess  = guess_column(site_cols, ["supervisor", "מדריך", "רכז", "מנחה"])
-site_cap_guess  = guess_column(site_cols, ["capacity", "קיבולת", "מכסה", "מקומות"])
-site_lat_guess  = guess_column(site_cols, ["lat", "latitude", "קו רוחב"])
-site_lon_guess  = guess_column(site_cols, ["lon", "lng", "longitude", "קו אורך"])
+# Sites
+site_name_col = guess_column(site_cols, ["שם אתר", "שם מקום", "site", "מקום", "ארגון"])
+site_city_col = guess_column(site_cols, ["city", "יישוב", "עיר", "מיקום"])
+site_zip_col  = guess_column(site_cols, ["zip", "מיקוד"])
+site_type_col = guess_column(site_cols, ["type", "סוג", "קטגוריה"])
+site_sup_col  = guess_column(site_cols, ["supervisor", "מדריך", "רכז", "מנחה"])
+site_cap_col  = guess_column(site_cols, ["capacity", "קיבולת", "מכסה", "מקומות"])
+t_lat_col     = guess_column(site_cols, ["lat", "latitude", "קו רוחב"])
+t_lon_col     = guess_column(site_cols, ["lon", "lng", "longitude", "קו אורך"])
 
-with st.form("mapping"):
-    m1, m2, m3 = st.columns(3)
-    with m1:
-        stud_id_col  = st.selectbox("ת\"ז סטודנט", stud_cols, index=stud_cols.index(stud_id_guess) if stud_id_guess in stud_cols else 0)
-        first_col    = st.selectbox("שם פרטי", stud_cols, index=stud_cols.index(first_guess) if first_guess in stud_cols else 0)
-        last_col     = st.selectbox("שם משפחה", stud_cols, index=stud_cols.index(last_guess) if last_guess in stud_cols else 0)
-        city_col     = st.selectbox("מקום מגורים (עיר/יישוב)", stud_cols, index=stud_cols.index(city_guess) if city_guess in stud_cols else 0)
-    with m2:
-        phone_col    = st.selectbox("מספר טלפון", stud_cols, index=stud_cols.index(phone_guess) if phone_guess in stud_cols else 0)
-        mail_col     = st.selectbox("אימייל", stud_cols, index=stud_cols.index(mail_guess) if mail_guess in stud_cols else 0)
-        s_lat_col    = st.selectbox("סטודנט: קו רוחב (אופציונלי)", [None] + stud_cols, index=(stud_cols.index(lat_guess)+1) if lat_guess in stud_cols else 0)
-        s_lon_col    = st.selectbox("סטודנט: קו אורך (אופציונלי)", [None] + stud_cols, index=(stud_cols.index(lon_guess)+1) if lon_guess in stud_cols else 0)
-    with m3:
-        partner_col  = st.selectbox("מזהה בן/בת זוג (אופציונלי)", [None] + stud_cols, index=(stud_cols.index(partner_guess)+1) if partner_guess in stud_cols else 0)
-        reason_col   = st.selectbox("סיבת התחשבות (טקסט/עדיפות) אופציונלי", [None] + stud_cols, index=(stud_cols.index(reason_guess)+1) if reason_guess in stud_cols else 0)
-
-    st.markdown("---")
-    n1, n2, n3 = st.columns(3)
-    with n1:
-        site_name_col = st.selectbox("שם מקום השיבוץ", site_cols, index=site_cols.index(site_name_guess) if site_name_guess in site_cols else 0)
-        site_city_col = st.selectbox("מיקום (עיר) השיבוץ", site_cols, index=site_cols.index(site_city_guess) if site_city_guess in site_cols else 0)
-        site_zip_col  = st.selectbox("מיקוד", [None] + site_cols, index=(site_cols.index(site_zip_guess)+1) if site_zip_guess in site_cols else 0)
-    with n2:
-        site_type_col = st.selectbox("סוג מקום השיבוץ (כלא/בית חולים/…)", [None] + site_cols, index=(site_cols.index(site_type_guess)+1) if site_type_guess in site_cols else 0)
-        site_sup_col  = st.selectbox("שם המדריך/ה (אופציונלי)", [None] + site_cols, index=(site_cols.index(site_sup_guess)+1) if site_sup_guess in site_cols else 0)
-        site_cap_col  = st.selectbox("קיבולת (מספר סטודנטים)", [None] + site_cols, index=(site_cols.index(site_cap_guess)+1) if site_cap_guess in site_cols else 0)
-    with n3:
-        site_lat_col  = st.selectbox("אתר: קו רוחב (אופציונלי)", [None] + site_cols, index=(site_cols.index(site_lat_guess)+1) if site_lat_guess in site_cols else 0)
-        site_lon_col  = st.selectbox("אתר: קו אורך (אופציונלי)", [None] + site_cols, index=(site_cols.index(site_lon_guess)+1) if site_lon_guess in site_cols else 0)
-
-    st.markdown("---")
-    w1, w2, w3 = st.columns(3)
-    with w1:
-        w_distance = st.slider("משקל מרחק (גבוה = עדיפות לקרוב)", min_value=0.0, max_value=1.0, value=0.8, step=0.05)
-    with w2:
-        sep_partners = st.checkbox("להפריד בני/ות זוג (לא אותו אתר/מדריך)", value=True)
-    with w3:
-        enforce_capacity = st.checkbox("להכיל קיבולת אתרים", value=True)
-
-    submitted = st.form_submit_button("🧮 חשב שיבוץ")
-
-# =========================
-# הכנת נתונים
-# =========================
-if not submitted:
+required = [stud_id_col, first_col, last_col, city_col, phone_col, mail_col, site_name_col, site_city_col]
+if any(c is None for c in required):
+    st.error("איתור עמודות נכשל עבור חלק מהשדות החיוניים. ודאי ששמות העמודות בקבצים ברורים (ת\"ז, שם פרטי, שם משפחה, עיר/יישוב, טלפון, אימייל; אתר: שם אתר, עיר).")
     st.stop()
 
-# הכן עותקים עם שמות עמודות סטנדרטיים
+# =========================
+# Prepare normalized frames
+# =========================
 S = pd.DataFrame({
     "student_id": stud_df[stud_id_col],
     "first_name": stud_df[first_col],
@@ -217,40 +186,29 @@ S = pd.DataFrame({
     "phone":      stud_df[phone_col],
     "email":      stud_df[mail_col],
 })
-if s_lat_col: S["s_lat"] = pd.to_numeric(stud_df[s_lat_col], errors="coerce")
-else:         S["s_lat"] = np.nan
-if s_lon_col: S["s_lon"] = pd.to_numeric(stud_df[s_lon_col], errors="coerce")
-else:         S["s_lon"] = np.nan
-if partner_col: S["partner_id"] = stud_df[partner_col]
-else:           S["partner_id"] = None
-if reason_col:  S["reason"] = stud_df[reason_col].astype(str)
-else:           S["reason"] = ""
+S["s_lat"] = pd.to_numeric(stud_df[s_lat_col], errors="coerce") if s_lat_col else np.nan
+S["s_lon"] = pd.to_numeric(stud_df[s_lon_col], errors="coerce") if s_lon_col else np.nan
+S["partner_id"] = stud_df[partner_col] if partner_col else ""
+S["reason"] = stud_df[reason_col].astype(str) if reason_col else ""
 
 T = pd.DataFrame({
     "site_name": site_df[site_name_col],
     "site_city": site_df[site_city_col],
 })
-if site_zip_col:  T["zip"]   = site_df[site_zip_col]
-else:             T["zip"]   = ""
-if site_type_col: T["sitetype"] = site_df[site_type_col]
-else:             T["sitetype"] = ""
-if site_sup_col:  T["supervisor"] = site_df[site_sup_col]
-else:             T["supervisor"] = ""
-if site_cap_col:  T["capacity"] = pd.to_numeric(site_df[site_cap_col], errors="coerce").fillna(1).astype(int)
-else:             T["capacity"] = 9999  # ללא מגבלה
-if site_lat_col:  T["t_lat"] = pd.to_numeric(site_df[site_lat_col], errors="coerce")
-else:             T["t_lat"] = np.nan
-if site_lon_col:  T["t_lon"] = pd.to_numeric(site_df[site_lon_col], errors="coerce")
-else:             T["t_lon"] = np.nan
+T["zip"]   = site_df[site_zip_col] if site_zip_col else ""
+T["sitetype"] = site_df[site_type_col] if site_type_col else ""
+T["supervisor"] = site_df[site_sup_col] if site_sup_col else ""
+T["capacity"] = pd.to_numeric(site_df[site_cap_col], errors="coerce").fillna(1).astype(int) if site_cap_col else 9999
+T["t_lat"] = pd.to_numeric(site_df[t_lat_col], errors="coerce") if t_lat_col else np.nan
+T["t_lon"] = pd.to_numeric(site_df[t_lon_col], errors="coerce") if t_lon_col else np.nan
 
 S.fillna({"partner_id":"", "reason":""}, inplace=True)
 T.fillna({"zip":"", "sitetype":"", "supervisor":"", "capacity":1}, inplace=True)
 
 # =========================
-# מטריצת מרחקים + ניקוד
+# Distance matrix & score
 # =========================
 dist_matrix = pd.DataFrame(index=S.index, columns=T.index, dtype=float)
-
 if S[["s_lat","s_lon"]].notna().all(axis=None) and T[["t_lat","t_lon"]].notna().all(axis=None):
     for i in S.index:
         for j in T.index:
@@ -258,33 +216,24 @@ if S[["s_lat","s_lon"]].notna().all(axis=None) and T[["t_lat","t_lon"]].notna().
 else:
     dist_matrix[:] = np.nan
 
-# נרמול מרחק לפי סטודנט (0..1 לכל שורה)
 norm_dist = dist_matrix.apply(normalize_series, axis=1)
-
-# ציון התאמה: מרחק קטן -> ציון גבוה (אם חסר מרחק, נחשב כרחוק)
 score = pd.DataFrame(0.0, index=S.index, columns=T.index)
 if norm_dist.notna().any().any():
-    score = w_distance * (1 - norm_dist.fillna(norm_dist.max().fillna(1)))
+    score = W_DISTANCE * (1 - norm_dist.fillna(norm_dist.max().fillna(1)))
 
 # =========================
-# אלגוריתם שיבוץ גרידי
+# Greedy assignment (auto)
 # =========================
 assignments = []
-site_slots = T["capacity"].copy() if enforce_capacity else pd.Series([999999]*len(T), index=T.index)
-
-# סדר עדיפויות: עבור כל סטודנט – האתר עם הציון הגבוה ביותר
+site_slots = T["capacity"].copy() if ENFORCE_CAPACITY else pd.Series([999999]*len(T), index=T.index)
 preferred_sites = score.apply(lambda row: list(row.sort_values(ascending=False).index), axis=1)
-
-assigned_site_idx = {}  # map student idx -> site idx
+assigned_site_idx = {}
 
 for i in S.index:
     for site_idx in preferred_sites[i]:
-        # קיבולת
         if site_slots[site_idx] <= 0:
             continue
-
-        # הפרדת בני/בנות זוג
-        if sep_partners and S.loc[i, "partner_id"]:
+        if SEP_PARTNERS and S.loc[i, "partner_id"]:
             partner_mask = (S["student_id"].astype(str) == str(S.loc[i, "partner_id"])) | \
                            (S["partner_id"].astype(str) == str(S.loc[i, "student_id"]))
             partner_indices = S.index[partner_mask].tolist()
@@ -292,41 +241,30 @@ for i in S.index:
             for pi in partner_indices:
                 if pi in assigned_site_idx:
                     other_site = assigned_site_idx[pi]
-                    # לא אותו אתר
                     if other_site == site_idx:
-                        conflict = True
-                        break
-                    # לא אותו מדריך (אם יש)
-                    if T.loc[other_site, "supervisor"] and T.loc[other_site, "supervisor"] == T.loc[site_idx, "supervisor"]:
-                        conflict = True
-                        break
+                        conflict = True; break
+                    if (T.loc[other_site, "supervisor"] and T.loc[site_idx, "supervisor"] and
+                        T.loc[other_site, "supervisor"] == T.loc[site_idx, "supervisor"]):
+                        conflict = True; break
             if conflict:
-                continue  # נסה אתר אחר
-
-        # שיבוץ
+                continue
         assigned_site_idx[i] = site_idx
         site_slots[site_idx] -= 1
         break
 
 # =========================
-# בניית פלט
+# Output
 # =========================
 rows = []
 for i, site_idx in assigned_site_idx.items():
-    s = S.loc[i]
-    t = T.loc[site_idx]
-
-    # מרחק בק"מ
+    s = S.loc[i]; t = T.loc[site_idx]
     d_km = np.nan
     if not np.isnan(s["s_lat"]) and not np.isnan(s["s_lon"]) and not np.isnan(t["t_lat"]) and not np.isnan(t["t_lon"]):
         d_km = haversine_km(s["s_lat"], s["s_lon"], t["t_lat"], t["t_lon"])
-
-    # אחוז התאמה – מהציון (0..1) -> 0..100
     pct = 0.0
-    if site_idx in score.columns:
-        sc = score.loc[i, site_idx]
-        if pd.notna(sc):
-            pct = float(np.clip(sc, 0, 1) * 100.0)
+    sc = score.loc[i, site_idx] if site_idx in score.columns else np.nan
+    if pd.notna(sc):
+        pct = float(np.clip(sc, 0, 1) * 100.0)
 
     rows.append({
         "ת\"ז הסטודנט": s["student_id"],
@@ -345,16 +283,21 @@ for i, site_idx in assigned_site_idx.items():
 
 result_df = pd.DataFrame(rows)
 
-st.subheader("📊 תוצאת השיבוץ")
+st.markdown('<div class="section">', unsafe_allow_html=True)
+st.subheader("📊 תוצאת השיבוץ (אוטומטי)")
 st.dataframe(result_df, use_container_width=True)
-
-# הורדה כ-CSV
 csv_data = result_df.to_csv(index=False).encode("utf-8-sig")
-st.download_button(
-    "⬇️ הורדת קובץ השיבוץ (CSV)",
-    data=csv_data,
-    file_name="שיבוץ_סטודנטים.csv",
-    mime="text/csv"
-)
+st.download_button("⬇️ הורדת קובץ השיבוץ (CSV)", data=csv_data, file_name="שיבוץ_סטודנטים.csv", mime="text/csv")
+st.markdown('</div>', unsafe_allow_html=True)
 
-st.caption("הערה: אם אין עמודות קואורדינטות (lat/lon) לסטודנטים ולאתרים – המרחק יחושב כלא זמין והציון יתבסס רק על אילוצים אחרים. מומלץ להוסיף lat/lon לכל רשומה לקבלת מרחק מדויק.")
+# Diagnostics (what columns were auto-detected)
+with st.expander("ℹ️ עמודות שאותרו אוטומטית"):
+    det = {
+        "ת\"ז סטודנט": stud_id_col, "שם פרטי": first_col, "שם משפחה": last_col, "עיר מגורים": city_col,
+        "טלפון": phone_col, "אימייל": mail_col, "סטודנט lat": s_lat_col, "סטודנט lon": s_lon_col,
+        "מזהה בן/בת זוג": partner_col, "סיבת התחשבות": reason_col,
+        "שם אתר": site_name_col, "עיר אתר": site_city_col, "מיקוד": site_zip_col,
+        "סוג אתר": site_type_col, "מדריך": site_sup_col, "קיבולת": site_cap_col,
+        "אתר lat": t_lat_col, "אתר lon": t_lon_col,
+    }
+    st.write(pd.DataFrame(det, index=["עמודה שנמצאה"]).T)
