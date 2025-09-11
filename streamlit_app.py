@@ -465,18 +465,61 @@ st.markdown("## ⚙️ ביצוע השיבוץ")
 run_btn = st.button("🚀 בצע שיבוץ", use_container_width=True)
 
 result_df = None
+unmatched_students = None
+unused_sites = None
+
 if run_btn:
     if students_file is None or sites_file is None:
         st.error("נא להעלות את שני הקבצים לפני הפעלת השיבוץ.")
     else:
         try:
-            # שימי לב: לא מוחקים שום עמודה (גם לא Unnamed)
             students = resolve_students(df_students_raw)
             sites = resolve_sites(df_sites_raw)
             result_df = greedy_match(students, sites, W)
+
+            # --- סטודנטים שלא שובצו ---
+            unmatched_students = result_df[result_df["שם מקום ההתמחות"] == "לא שובץ"]
+
+            # --- מוסדות שלא שובץ אליהם אף אחד ---
+            used_sites = set(result_df["שם מקום ההתמחות"].unique())
+            unused_sites = sites[~sites["site_name"].isin(used_sites)]
+
             st.success("השיבוץ הושלם ✓")
         except Exception as e:
             st.exception(e)
+
+# ====== 5) תוצאות ======
+st.markdown("## 📊 תוצאות השיבוץ")
+if result_df is not None and not result_df.empty:
+    st.dataframe(result_df, use_container_width=True)
+
+    # כפתור Excel בלבד
+    xlsx_io = BytesIO()
+    with pd.ExcelWriter(xlsx_io, engine="xlsxwriter") as writer:
+        result_df.to_excel(writer, index=False, sheet_name="שיבוץ")
+    xlsx_io.seek(0)
+    st.download_button(
+        label="הורדת Excel (XLSX)",
+        data=xlsx_io.getvalue(),
+        file_name="student_site_matching.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        key="dl_xlsx",
+        help="excel-like"
+    )
+
+    # --- טבלה: סטודנטים שלא שובצו ---
+    if unmatched_students is not None and not unmatched_students.empty:
+        st.markdown("### 👩‍🎓 סטודנטים שלא שובצו")
+        st.dataframe(unmatched_students, use_container_width=True)
+
+    # --- טבלה: מוסדות ללא סטודנטים ---
+    if unused_sites is not None and not unused_sites.empty:
+        st.markdown("### 🏫 מוסדות שלא שובץ אליהם אף סטודנט")
+        st.dataframe(unused_sites[["site_name","site_city","site_field","site_capacity"]], use_container_width=True)
+
+else:
+    st.caption("טרם הופעל שיבוץ או שאין תוצאות להצגה.")
+
 
 # ====== 5) תוצאות ======
 st.markdown("## 📊 תוצאות השיבוץ")
