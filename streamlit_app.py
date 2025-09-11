@@ -1,5 +1,5 @@
 
-# matcher_streamlit_beauty_rtl.py
+# matcher_streamlit_beauty.py
 # -*- coding: utf-8 -*-
 import streamlit as st
 import pandas as pd
@@ -7,134 +7,88 @@ import numpy as np
 from dataclasses import dataclass
 from typing import Optional, Dict, Any, List
 
+# ===================== Page & Global Style =====================
 st.set_page_config(page_title="מערכת שיבוץ סטודנטים – התאמה חכמה", layout="wide")
 
-# ====== עיצוב מודרני + RTL + הסתרת "Press Enter to apply" ======
 st.markdown("""
 <style>
-@font-face {
-  font-family:'David';
-  src:url('https://example.com/David.ttf') format('truetype');
-}
-html, body, [class*="css"] {
-  font-family:'David',sans-serif!important;
-}
-
-/* ====== עיצוב מודרני + RTL ====== */
 :root{
-  --bg-1:#e0f7fa;
-  --bg-2:#ede7f6;
-  --bg-3:#fff3e0;
-  --bg-4:#fce4ec;
-  --bg-5:#e8f5e9;
   --ink:#0f172a;
-  --primary:#9b5de5;
-  --primary-700:#f15bb5;
-  --ring:rgba(155,93,229,.35);
+  --muted:#475569;
+  --brand:#6366f1;
+  --card:rgba(255,255,255,.86);
+  --ring:rgba(99,102,241,.25);
+  --ok:#16a34a;
+  --warn:#f59e0b;
+  --bad:#ef4444;
 }
 
-/* רקע וטופ-קונטיינר */
+html, body, [class*="css"]{ font-family: system-ui, "Segoe UI", Arial; }
+.stApp, .main{ direction:rtl; text-align:right; }
+
+/* Background (soft gradients) */
 [data-testid="stAppViewContainer"]{
   background:
-    radial-gradient(1200px 600px at 15% 10%, var(--bg-2) 0%, transparent 70%),
-    radial-gradient(1000px 700px at 85% 20%, var(--bg-3) 0%, transparent 70%),
-    radial-gradient(900px 500px at 50% 80%, var(--bg-4) 0%, transparent 70%),
-    radial-gradient(700px 400px at 10% 85%, var(--bg-5) 0%, transparent 70%),
-    linear-gradient(135deg, var(--bg-1) 0%, #ffffff 100%) !important;
-  color: var(--ink);
+    radial-gradient(1100px 500px at 8% 8%, #e0f7fa 0%, transparent 65%),
+    radial-gradient(900px 450px at 92% 12%, #ede7f6 0%, transparent 60%),
+    radial-gradient(900px 480px at 20% 90%, #fff3e0 0%, transparent 55%);
 }
-.main .block-container{
-  background: rgba(255,255,255,.78);
-  backdrop-filter: blur(10px);
-  border:1px solid rgba(15,23,42,.08);
-  box-shadow:0 15px 35px rgba(15,23,42,.08);
-  border-radius:24px;
-  padding:2.5rem;
-  margin-top:1rem;
+.block-container{ padding-top:1.0rem; }
+
+/* Hero */
+.hero{
+  max-width:1000px; margin:20px auto 10px auto; padding:24px 28px;
+  background:linear-gradient(135deg, rgba(255,255,255,.88), rgba(255,255,255,.78));
+  border:1px solid #e5e7eb; border-radius:22px;
+  box-shadow:0 18px 50px rgba(2,6,23,.06);
+}
+.hero h1{ margin:0 0 6px 0; color:var(--ink); font-size:2.0rem; }
+.hero p{ margin:0; color:var(--muted); }
+
+/* Section cards */
+.section{
+  max-width:1100px; margin:20px auto; padding:22px 22px;
+  background:var(--card);
+  border:1px solid #e6e9f2; border-radius:18px;
+  box-shadow:0 14px 36px rgba(2,6,23,.07);
+}
+.section h3{ margin-top:0; color:var(--ink); }
+.section .muted{ color:var(--muted); }
+
+/* Upload form */
+.upload-card{ padding:10px 14px; border-radius:14px; border:1px dashed #d1d5db; background:rgba(255,255,255,.65); }
+.stButton>button{
+  border-radius:12px; padding:.6rem 1rem;
+  box-shadow:0 10px 20px rgba(99,102,241,.20);
 }
 
-/* כותרות */
-h1,h2,h3,.stMarkdown h1,.stMarkdown h2{
-  text-align:center;
-  letter-spacing:.5px;
-  text-shadow:0 1px 2px rgba(255,255,255,.7);
-  font-weight:700;
-  color:#222;
-  margin-bottom:1rem;
-}
+/* Tables spacing */
+[data-testid="stHorizontalBlock"]{ gap:1.2rem; }
 
-/* כפתור */
-.stButton > button{
-  background:linear-gradient(135deg,var(--primary) 0%,var(--primary-700) 100%)!important;
-  color:#fff!important;
-  border:none!important;
-  border-radius:18px!important;
-  padding:1rem 2rem!important;
-  font-size:1.1rem!important;
-  font-weight:600!important;
-  box-shadow:0 8px 18px var(--ring)!important;
-  transition:all .15s ease!important;
-}
-.stButton > button:hover{
-  transform:translateY(-3px) scale(1.02);
-  filter:brightness(1.08);
-}
-.stButton > button:focus{
-  outline:none!important;
-  box-shadow:0 0 0 4px var(--ring)!important;
-}
+/* Pills / labels */
+.pill{ display:inline-block; padding:.25rem .6rem; border-radius:999px; background:#eef2ff; color:#3730a3; font-size:.85rem; }
 
-/* קלטים */
-div.stSelectbox > div,
-div.stMultiSelect > div,
-.stTextInput > div > div > input{
-  border-radius:14px!important;
-  border:1px solid rgba(15,23,42,.12)!important;
-  box-shadow:0 3px 10px rgba(15,23,42,.04)!important;
-  padding:.6rem .8rem!important;
-  color:var(--ink)!important;
-  font-size:1rem!important;
-}
-
-/* טאבים – רוחב קטן יותר */
-.stTabs [data-baseweb="tab"]{
-  border-radius:14px!important;
-  background:rgba(255,255,255,.65);
-  margin-inline-start:.3rem;
-  padding:.4rem .8rem;
-  font-weight:600;
-  min-width: 110px !important;
-  text-align:center;
-  font-size:0.9rem !important;
-}
-.stTabs [data-baseweb="tab"]:hover{
-  background:rgba(255,255,255,.9);
-}
-
-/* RTL */
-.stApp,.main,[data-testid="stSidebar"]{
-  direction:rtl;
-  text-align:right;
-}
-label,.stMarkdown,.stText,.stCaption{
-  text-align:right!important;
-}
-
-/* הסתרת טיפ "Press Enter to apply" אם מופיע כ-title */
-*[title="Press Enter to apply"]{ display:none !important; }
+/* Headings */
+h2.section-title{ display:flex; align-items:center; gap:.5rem; color:#111827; margin:0 0 .75rem 0; }
+h2.section-title .emoji{ font-size:1.25rem; }
 </style>
 """, unsafe_allow_html=True)
 
-# ====== מבנה מסך: 1) כותרת (Hero) ======
-st.markdown("<h1>מערכת שיבוץ סטודנטים – התאמה חכמה</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align:center;color:#475569;margin-top:-8px;'>העלו שני קבצים (סטודנטים ואתרי התמחות), בצעו שיבוץ אוטומטי – פשוט ומסודר.</p>", unsafe_allow_html=True)
+# ===================== Hero =====================
+st.markdown("""
+<div class="hero">
+  <h1>🏷️ מערכת שיבוץ סטודנטים – התאמה חכמה</h1>
+  <p>העלו שני קבצים (סטודנטים ואתרי התמחות), בצעו שיבוץ אוטומטי – פשוט, מסודר ואלגנטי.</p>
+</div>
+""", unsafe_allow_html=True)
 
-# ====== לוגיקה ותשתית ======
+# ===================== Data & Logic =====================
 @dataclass
 class Weights:
-    w_field: float = 0.70
-    w_city: float = 0.20
-    w_special: float = 0.10
+    # קבועים – אין סליידרים או פרמטרים במסך
+    w_field: float = 0.70    # התאמה לתחום
+    w_city: float = 0.20     # התאמת עיר
+    w_special: float = 0.10  # בקשות מיוחדות
 
 STU_COLS = {
     "id": ["מספר תעודת זהות", "תעודת זהות", "ת\"ז", "תז", "תעודת זהות הסטודנט"],
@@ -148,6 +102,7 @@ STU_COLS = {
     "special_req": ["בקשה מיוחדת"],
     "partner": ["בן/בת זוג להכשרה", "בן\\בת זוג להכשרה", "בן/בת זוג", "בן\\בת זוג"]
 }
+
 SITE_COLS = {
     "name": ["מוסד / שירות הכשרה", "מוסד", "שם מוסד ההתמחות"],
     "field": ["תחום ההתמחות", "תחום התמחות"],
@@ -246,7 +201,8 @@ def field_match_score(stu_pref: str, site_field: str) -> float:
         return 90.0
     tp = set([w for w in tokens(sp) if len(w) > 1])
     tf = set([w for w in tokens(sf) if len(w) > 1])
-    if tp.intersection(tf):
+    inter = tp.intersection(tf)
+    if inter:
         return 75.0
     return 45.0
 
@@ -369,48 +325,62 @@ def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, W: Weights) 
 
 W = Weights()
 
-# ====== 1) הוראות שימוש ======
-st.markdown("## 📘 הוראות שימוש")
+# ===================== 1) הוראות שימוש =====================
 st.markdown("""
-1. **קובץ סטודנטים (CSV/XLSX):** שם פרטי, שם משפחה, תעודת זהות, כתובת/עיר, טלפון, אימייל.  
-   אופציונלי: תחום מועדף, בקשה מיוחדת, בן/בת זוג להכשרה.
-2. **קובץ אתרים/מדריכים (CSV/XLSX):** מוסד/שירות, תחום התמחות, רחוב, עיר, מספר סטודנטים שניתן לקלוט השנה.  
-   אופציונלי: שם פרטי+שם משפחה של המדריך, טלפון, אימייל.
-3. לחיצה על **בצע שיבוץ** תחשב *אחוז התאמה* לפי תחום (70%), עיר (20%), בקשות (10%), כולל הפרדת בני/בנות זוג ואכיפת קיבולת.
-4. בסוף ניתן להוריד את קובץ התוצאות.
-""")
+<div class="section">
+  <h2 class="section-title"><span class="emoji">📘</span> הוראות שימוש</h2>
+  <ol>
+    <li>הכינו <b>קובץ סטודנטים</b> (CSV/XLSX) עם: שם פרטי, שם משפחה, תעודת זהות, כתובת/עיר, טלפון, אימייל. אופציונלי: תחום מועדף, בקשה מיוחדת, בן/בת זוג להכשרה.</li>
+    <li>הכינו <b>קובץ אתרי התמחות/מדריכים</b> (CSV/XLSX) עם: מוסד/שירות, תחום התמחות, רחוב, עיר, מספר סטודנטים שניתן לקלוט השנה. אופציונלי: שם פרטי+שם משפחה של המדריך, טלפון, אימייל.</li>
+    <li>לחצו על <b>בצע שיבוץ</b>. אחוז ההתאמה מחושב לפי התאמת תחום (70%), התאמת עיר (20%) ובקשות מיוחדות (10%), כולל הפרדת בני/בנות זוג ואכיפת קיבולת.</li>
+    <li>בסיום, הורידו את קובץ התוצאות בלחיצה על כפתור ההורדה.</li>
+  </ol>
+  <div class="muted">הערה: העמוד מזהה אוטומטית וריאציות נפוצות לשמות העמודות בעברית.</div>
+</div>
+""", unsafe_allow_html=True)
 
-# ====== 2) העלאת קבצים ======
-st.markdown("## 📤 העלאת קבצים")
-colA, colB = st.columns(2, gap="large")
-with colA:
-    students_file = st.file_uploader("קובץ סטודנטים", type=["csv","xlsx","xls"], key="students_file")
-    if students_file is not None:
-        st.caption("הצצה ל-5 הרשומות הראשונות:")
-        try:
-            df_students_raw = read_any(students_file)
-            st.dataframe(df_students_raw.head(5), use_container_width=True)
-        except Exception:
-            st.error("לא ניתן לקרוא את הקובץ.")
+# ===================== 2) העלאת קבצים =====================
+with st.container():
+    st.markdown("""
+    <div class="section">
+      <h2 class="section-title"><span class="emoji">📤</span> העלאת קבצים</h2>
+      <div class="upload-card">
+        העלו קובץ סטודנטים וקובץ אתרי התמחות (CSV, XLSX, XLS).
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    colA, colB = st.columns(2, gap="large")
+    with colA:
+        students_file = st.file_uploader("קובץ סטודנטים", type=["csv","xlsx","xls"], key="students_file")
+        if students_file is not None:
+            st.caption("הצצה ל-5 הרשומות הראשונות:")
+            try:
+                df_students_raw = read_any(students_file)
+                df_students_raw_preview = df_students_raw.head(5)
+                st.dataframe(df_students_raw_preview, use_container_width=True)
+            except Exception as e:
+                st.error("לא ניתן לקרוא את הקובץ. ודאו שהוא CSV/XLSX תקין.")
+                df_students_raw = None
+        else:
             df_students_raw = None
-    else:
-        df_students_raw = None
 
-with colB:
-    sites_file = st.file_uploader("קובץ אתרי התמחות/מדריכים", type=["csv","xlsx","xls"], key="sites_file")
-    if sites_file is not None:
-        st.caption("הצצה ל-5 הרשומות הראשונות:")
-        try:
-            df_sites_raw = read_any(sites_file)
-            st.dataframe(df_sites_raw.head(5), use_container_width=True)
-        except Exception:
-            st.error("לא ניתן לקרוא את הקובץ.")
+    with colB:
+        sites_file = st.file_uploader("קובץ אתרי התמחות/מדריכים", type=["csv","xlsx","xls"], key="sites_file")
+        if sites_file is not None:
+            st.caption("הצצה ל-5 הרשומות הראשונות:")
+            try:
+                df_sites_raw = read_any(sites_file)
+                df_sites_raw_preview = df_sites_raw.head(5)
+                st.dataframe(df_sites_raw_preview, use_container_width=True)
+            except Exception as e:
+                st.error("לא ניתן לקרוא את הקובץ. ודאו שהוא CSV/XLSX תקין.")
+                df_sites_raw = None
+        else:
             df_sites_raw = None
-    else:
-        df_sites_raw = None
 
-# ====== 3) דוגמה לשימוש ======
-st.markdown("## 🧪 דוגמה לשימוש")
+# ===================== 3) דוגמה לשימוש =====================
+# Small built-in example tables for visual guidance (not used for matching)
 example_students = pd.DataFrame([
     {"שם פרטי":"רות", "שם משפחה":"כהן", "תעודת זהות":"123456789", "כתובת":"הרצל 12", "עיר מגורים":"תל אביב", "טלפון":"0501111111", "דוא\"ל":"ruth@example.com", "תחום מועדף":"בריאות הנפש"},
     {"שם פרטי":"יואב", "שם משפחה":"לוי", "תעודת זהות":"987654321", "כתובת":"דיזנגוף 80", "עיר מגורים":"תל אביב", "טלפון":"0502222222", "דוא\"ל":"yoav@example.com", "תחום מועדף":"רווחה"}
@@ -419,6 +389,14 @@ example_sites = pd.DataFrame([
     {"מוסד / שירות הכשרה":"מרכז חוסן תל אביב", "תחום ההתמחות":"בריאות הנפש", "רחוב":"אבן גבירול 1", "עיר":"תל אביב", "מספר סטודנטים שניתן לקלוט השנה":2},
     {"מוסד / שירות הכשרה":"מחלקת רווחה רמת גן", "תחום ההתמחות":"רווחה", "רחוב":"ביאליק 10", "עיר":"רמת גן", "מספר סטודנטים שניתן לקלוט השנה":1},
 ])
+
+st.markdown("""
+<div class="section">
+  <h2 class="section-title"><span class="emoji">🧪</span> דוגמה לשימוש</h2>
+  <div class="muted">כך נראים קבצים בסכימה מומלצת. ניתן להוריד ולמלא כבסיס.</div>
+</div>
+""", unsafe_allow_html=True)
+
 colX, colY = st.columns(2, gap="large")
 with colX:
     st.write("**דוגמה – סטודנטים**")
@@ -433,8 +411,14 @@ with colY:
                        data=example_sites.to_csv(index=False, encoding="utf-8-sig"),
                        file_name="sites_example.csv", mime="text/csv")
 
-# ====== 4) שיבוץ ======
-st.markdown("## ⚙️ ביצוע השיבוץ")
+# ===================== 4) שיבוץ =====================
+st.markdown("""
+<div class="section">
+  <h2 class="section-title"><span class="emoji">⚙️</span> ביצוע השיבוץ</h2>
+  <div class="muted">השיבוץ מתחשב בתחום, בעיר, בבקשות מיוחדות, בקיבולת ובבני/בנות זוג. לחצו להפעלה.</div>
+</div>
+""", unsafe_allow_html=True)
+
 run_btn = st.button("🚀 בצע שיבוץ", use_container_width=True)
 
 result_df = None
@@ -443,82 +427,25 @@ if run_btn:
         st.error("נא להעלות את שני הקבצים לפני הפעלת השיבוץ.")
     else:
         try:
+            # Clean + resolve
             for df in (df_students_raw, df_sites_raw):
                 drop_cols = [c for c in df.columns if str(c).startswith("Unnamed")]
                 df.drop(columns=drop_cols, inplace=True, errors="ignore")
-            # Resolve
-            def tokens(s: str) -> List[str]:
-                return [t for t in str(s).replace(","," ").replace("/"," ").replace("-"," ").split() if t]
             students = resolve_students(df_students_raw)
             sites = resolve_sites(df_sites_raw)
-            # Matching
-            def candidate_table_for_student(stu: pd.Series, sites_df: pd.DataFrame, W: Weights) -> pd.DataFrame:
-                tmp = sites_df.copy()
-                tmp["score"] = tmp.apply(lambda r: compute_score(stu, r, W), axis=1)
-                return tmp.sort_values(["score"], ascending=[False])
-            def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, W: Weights) -> pd.DataFrame:
-                separate_couples = True; top_k = 10
-                def dec_cap(i): sites_df.at[i,"capacity_left"]=int(sites_df.at[i,"capacity_left"])-1
-                results=[]; processed=set(); partner_map=find_partner_map(students_df)
-                # couples
-                for _, s in students_df.iterrows():
-                    sid=s["stu_id"]
-                    if sid in processed: continue
-                    pid=partner_map.get(sid)
-                    if pid and partner_map.get(pid)==sid:
-                        r2 = students_df[students_df["stu_id"]==pid]
-                        if r2.empty: continue
-                        s2=r2.iloc[0]
-                        c1=candidate_table_for_student(s, sites_df[sites_df["capacity_left"]>0], W).head(top_k)
-                        c2=candidate_table_for_student(s2, sites_df[sites_df["capacity_left"]>0], W).head(top_k)
-                        best=(-1.0,None,None)
-                        for i1,r1 in c1.iterrows():
-                            for i2,r2 in c2.iterrows():
-                                if i1==i2: continue
-                                if r1.get("supervisor") and r1.get("supervisor")==r2.get("supervisor"): continue
-                                sc=float(r1["score"])+float(r2["score"])
-                                if sc>best[0]: best=(sc,i1,i2)
-                        if best[1] is not None:
-                            rsite1=sites_df.loc[best[1]]; rsite2=sites_df.loc[best[2]]
-                            dec_cap(best[1]); dec_cap(best[2])
-                            results.append((s,rsite1)); results.append((s2,rsite2))
-                            processed.add(sid); processed.add(pid)
-                # singles
-                for _, s in students_df.iterrows():
-                    sid=s["stu_id"]
-                    if sid in processed: continue
-                    c=candidate_table_for_student(s, sites_df[sites_df["capacity_left"]>0], W).head(top_k)
-                    if not c.empty:
-                        idx=c.index[0]; r=sites_df.loc[idx]
-                        dec_cap(idx); results.append((s,r)); processed.add(sid)
-                rows=[]
-                for s,r in results:
-                    rows.append({
-                        "ת\"ז הסטודנט": s.get("stu_id"),
-                        "שם פרטי": s.get("stu_first"),
-                        "שם משפחה": s.get("stu_last"),
-                        "כתובת": s.get("stu_address"),
-                        "עיר": s.get("stu_city"),
-                        "מספר טלפון": s.get("stu_phone"),
-                        "אימייל": s.get("stu_email"),
-                        "אחוז התאמה": round(compute_score(s,r,W),1),
-                        "שם מקום ההתמחות": r.get("site_name"),
-                        "עיר המוסד": r.get("site_city"),
-                        "סוג מקום השיבוץ": r.get("site_type"),
-                        "תחום ההתמחות במוסד": r.get("site_field"),
-                    })
-                out=pd.DataFrame(rows)
-                desired=["ת\"ז הסטודנט","שם פרטי","שם משפחה","כתובת","עיר","מספר טלפון","אימייל",
-                         "אחוז התאמה","שם מקום ההתמחות","עיר המוסד","סוג מקום השיבוץ","תחום ההתמחות במוסד"]
-                return out[[c for c in desired if c in out.columns]]
             result_df = greedy_match(students, sites, W)
             st.success("השיבוץ הושלם ✓")
         except Exception as e:
             st.exception(e)
 
-# ====== 5) תוצאות ======
-st.markdown("## 📊 תוצאות השיבוץ")
-if 'result_df' in locals() and result_df is not None and not result_df.empty:
+# ===================== 5) תוצאות השיבוץ =====================
+st.markdown("""
+<div class="section">
+  <h2 class="section-title"><span class="emoji">📊</span> תוצאות השיבוץ</h2>
+</div>
+""", unsafe_allow_html=True)
+
+if result_df is not None and not result_df.empty:
     st.dataframe(result_df, use_container_width=True)
     csv = result_df.to_csv(index=False, encoding="utf-8-sig")
     st.download_button("⬇️ הורדת קובץ התוצאות (CSV)", data=csv, file_name="student_site_matching.csv", mime="text/csv")
