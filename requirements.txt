@@ -1,4 +1,5 @@
-
-streamlit
-pandas
-geopy
+streamlit>=1.36
+pandas>=2.2
+numpy>=1.26
+geopy>=2.4
+openpyxl>=3.1
