@@ -5,6 +5,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from dataclasses import dataclass
+from io import BytesIO
 from typing import Optional, Dict, Any, List
 
 st.set_page_config(page_title="מערכת שיבוץ סטודנטים – התאמה חכמה", layout="wide")
@@ -452,7 +453,10 @@ if run_btn:
 st.subheader("📊 תוצאות השיבוץ")
 if result_df is not None and not result_df.empty:
     st.dataframe(result_df, use_container_width=True)
-    csv_bytes = result_df.to_csv(index=False).encode("cp1255", errors="replace")
-    st.download_button("⬇️ הורדת קובץ התוצאות (CSV)", data=csv_bytes, file_name="student_site_matching.csv", mime="text/csv; charset=windows-1255")
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        result_df.to_excel(writer, index=False, sheet_name="שיבוץ")
+    xlsx_data = output.getvalue()
+    st.download_button("הורדת Excel (XLSX) ⬇️", data=xlsx_data, file_name="student_site_matching.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 else:
     st.caption("טרם הופעל שיבוץ או שאין תוצאות להצגה.")
