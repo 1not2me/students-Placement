@@ -1,5 +1,5 @@
 
-# matcher_streamlit_xlsx_csv_styled.py
+# matcher_streamlit_xlsx_csv_styled_v2.py
 # -*- coding: utf-8 -*-
 import streamlit as st
 import pandas as pd
@@ -10,7 +10,7 @@ from typing import Tuple, Optional, Dict, Any, List
 
 st.set_page_config(page_title="מערכת שיבוץ סטודנטים – התאמה חכמה", layout="wide")
 
-# --- Exact style snippet from user ---
+# --- Exact style snippet (as requested) ---
 st.markdown("""
 <style>
 :root{
@@ -60,13 +60,14 @@ input, textarea, select{ direction:rtl; text-align:right; }
 st.title("🏷️ מערכת שיבוץ סטודנטים – התאמה לפי מרחק, תחום והעדפות")
 st.caption("מחשב מרחקים, ניקוד התאמה ושיבוץ מתוך קבצי CSV/XLSX של סטודנטים ואתרי התמחות.")
 
+# ================= Models & Mappers =================
 @dataclass
 class Weights:
     w_distance: float = 0.7
     w_preferred_field: float = 0.2
     w_special_request: float = 0.1
 
-# Synonyms for columns
+# Possible column names (Hebrew variants)
 STU_COLS = {
     "id": ["מספר תעודת זהות", "תעודת זהות", "ת\"ז", "תז", "תעודת זהות הסטודנט"],
     "first": ["שם פרטי"],
@@ -144,8 +145,10 @@ def detect_site_type(name: str, field: str) -> str:
         return "חינוך"
     return "אחר"
 
+# ================= Distance (Haversine) =================
 def haversine(lat1, lon1, lat2, lon2) -> float:
-    if None in (lat1, lon1, lat2, lon2) or any(pd.isna([lat1, lon1, lat2, lon2])):
+    vals = [lat1, lon1, lat2, lon2]
+    if any(v is None for v in vals) or any(pd.isna(v) for v in vals):
         return np.nan
     lon1, lat1, lon2, lat2 = map(radians, [lon1, lat1, lon2, lat2])
     dlon = lon2 - lon1 
@@ -155,6 +158,7 @@ def haversine(lat1, lon1, lat2, lon2) -> float:
     r = 6371
     return c * r
 
+# ================= Geocoding (optional) =================
 _GEOCODER = None
 _CACHE: Dict[str, Tuple[Optional[float], Optional[float]]] = {}
 
@@ -236,6 +240,7 @@ def candidate_table_for_student(stu: pd.Series, sites_df: pd.DataFrame, weights:
     tmp["score"] = tmp.apply(lambda r: compute_score(stu, r, r["distance_km"], weights, no_car_km), axis=1)
     return tmp.sort_values(["score", "distance_km"], ascending=[False, True])
 
+# ================= Resolve Inputs =================
 def resolve_students(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
     out["stu_id"]  = out[pick_col(out, STU_COLS["id"])]
@@ -255,11 +260,16 @@ def resolve_sites(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
     out["site_name"]  = out[pick_col(out, SITE_COLS["name"])]
     out["site_field"] = out[pick_col(out, SITE_COLS["field"])]
+    # city for export
+    city_col = pick_col(out, SITE_COLS["city"])
+    out["site_city"] = out[city_col] if city_col else ""
+    # capacity & address
     cap_col = pick_col(out, SITE_COLS["capacity"])
     out["site_capacity"] = pd.to_numeric(out[cap_col], errors="coerce").fillna(1).astype(int) if cap_col else 1
     out["capacity_left"] = out["site_capacity"].astype(int)
     out["site_address_full"] = out.apply(lambda r: build_site_address(r, out), axis=1)
     out["site_type"] = out.apply(lambda r: detect_site_type(r.get("site_name"), r.get("site_field")), axis=1)
+    # supervisor
     sup_first = pick_col(out, SITE_COLS["sup_first"])
     sup_last  = pick_col(out, SITE_COLS["sup_last"])
     out["supervisor"] = ""
@@ -289,6 +299,7 @@ def find_partner_map(students_df: pd.DataFrame) -> Dict[str, str]:
                     break
     return mapping
 
+# ================= Matching =================
 def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, weights: Weights, no_car_km: float,
                  top_k: int, separate_couples: bool) -> pd.DataFrame:
 
@@ -299,7 +310,7 @@ def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, weights: Wei
     processed: set[str] = set()
     partner_map = find_partner_map(students_df)
 
-    # Couples
+    # Couples first
     for _, s in students_df.iterrows():
         sid = str(s["stu_id"])
         if sid in processed: 
@@ -343,6 +354,7 @@ def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, weights: Wei
             results.append((s, rsite))
             processed.add(sid)
 
+    # Build output
     rows = []
     for s, r in results:
         km = haversine(s.get("stu_lat"), s.get("stu_lon"), r.get("site_lat"), r.get("site_lon"))
@@ -355,17 +367,25 @@ def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, weights: Wei
             "מספר טלפון": s.get("stu_phone"),
             "אימייל": s.get("stu_email"),
             "אחוז התאמה": round(score, 1),
+            # Distances
             "מרחק ק\"מ (סטודנט←מוסד)": None if pd.isna(km) else round(float(km), 2),
+            "מרחק ק\"מ (סטודנט←מדריך)": None if pd.isna(km) else round(float(km), 2),  # בהנחה שכתובת המדריך = כתובת המוסד
+            # Site meta
+            "שם מקום ההתמחות": r.get("site_name"),
+            "עיר המוסד": r.get("site_city"),
             "סוג מקום השיבוץ": r.get("site_type"),
-            "שם מוסד ההתמחות": r.get("site_name"),
             "תחום ההתמחות במוסד": r.get("site_field"),
         })
     out = pd.DataFrame(rows)
-    desired = ["ת\"ז הסטודנט","שם פרטי","שם משפחה","כתובת","מספר טלפון","אימייל","אחוז התאמה","מרחק ק\"מ (סטודנט←מוסד)","סוג מקום השיבוץ",
-               "שם מוסד ההתמחות","תחום ההתמחות במוסד"]
+    desired = [
+        "ת\"ז הסטודנט","שם פרטי","שם משפחה","כתובת","מספר טלפון","אימייל",
+        "אחוז התאמה","מרחק ק\"מ (סטודנט←מדריך)","מרחק ק\"מ (סטודנט←מוסד)",
+        "שם מקום ההתמחות","עיר המוסד","סוג מקום השיבוץ","תחום ההתמחות במוסד"
+    ]
     out = out[[c for c in desired if c in out.columns]]
     return out
 
+# ================= I/O Helpers =================
 def read_any(uploaded) -> pd.DataFrame:
     if uploaded is None:
         return None
@@ -391,6 +411,7 @@ def preprocess_frames(stu_raw: pd.DataFrame, site_raw: pd.DataFrame, allow_geo: 
     sites = ensure_latlon(sites, "site_address_full", "site", allow_geo)
     return students, sites
 
+# ================= Sidebar & Main =================
 with st.sidebar:
     st.header("העלאת קבצים והגדרות")
     students_file = st.file_uploader("סטודנטים – CSV/XLSX", type=["csv","xlsx","xls"])
@@ -415,25 +436,32 @@ tab1, tab2 = st.tabs(["📤 העלאת נתונים", "📊 תוצאות השי�
 with tab1:
     st.subheader("1) העלו את טבלאות המקור (CSV/XLSX)")
     st.info("הקוד מזהה עמודות נפוצות באופן אוטומטי. לשיפור דיוק המרחקים אפשר להוסיף עמודות קואורדינטות (`stu_lat, stu_lon`, `site_lat, site_lon`).")
+    if 'df_students_raw' not in st.session_state:
+        st.session_state['df_students_raw'] = None
+    if 'df_sites_raw' not in st.session_state:
+        st.session_state['df_sites_raw'] = None
+
     if students_file:
         st.success(f"קובץ סטודנטים נטען: {students_file.name}")
-        df_students_raw = read_any(students_file)
-        st.dataframe(df_students_raw.head(10), use_container_width=True)
+        st.session_state['df_students_raw'] = read_any(students_file)
+        st.dataframe(st.session_state['df_students_raw'].head(10), use_container_width=True)
     else:
-        st.warning("לא הועלה קובץ סטודנטים.")
-        df_students_raw = None
+        if st.session_state['df_students_raw'] is None:
+            st.warning("לא הועלה קובץ סטודנטים.")
 
     if sites_file:
         st.success(f"קובץ אתרי התמחות נטען: {sites_file.name}")
-        df_sites_raw = read_any(sites_file)
-        st.dataframe(df_sites_raw.head(10), use_container_width=True)
+        st.session_state['df_sites_raw'] = read_any(sites_file)
+        st.dataframe(st.session_state['df_sites_raw'].head(10), use_container_width=True)
     else:
-        st.warning("לא הועלה קובץ אתרים.")
-        df_sites_raw = None
+        if st.session_state['df_sites_raw'] is None:
+            st.warning("לא הועלה קובץ אתרים.")
 
 with tab2:
     st.subheader("2) הרצת שיבוץ והורדת קובץ תוצאה")
     if run_btn:
+        df_students_raw = st.session_state['df_students_raw']
+        df_sites_raw = st.session_state['df_sites_raw']
         if df_students_raw is None or df_sites_raw is None:
             st.error("חסר אחד הקבצים. נא להעלות גם סטודנטים וגם אתרים.")
         else:
