@@ -13,52 +13,11 @@ CSV_FILE = "mapping_data.csv"
 # ===== עיצוב =====
 st.markdown("""
 <style>
-:root{
-  --ink:#0f172a; 
-  --muted:#475569; 
-  --ring:rgba(99,102,241,.25); 
-  --card:rgba(255,255,255,.85);
-}
-
-/* RTL + פונטים */
-html, body, [class*="css"] { font-family: system-ui, "Segoe UI", Arial; }
-.stApp, .main, [data-testid="stSidebar"]{ direction:rtl; text-align:right; }
-
-/* רקע */
-[data-testid="stAppViewContainer"]{
-  background:
-    radial-gradient(1200px 600px at 8% 8%, #e0f7fa 0%, transparent 65%),
-    radial-gradient(1000px 500px at 92% 12%, #ede7f6 0%, transparent 60%),
-    radial-gradient(900px 500px at 20% 90%, #fff3e0 0%, transparent 55%);
-}
-.block-container{ padding-top:1.1rem; }
-
-/* מסגרת לטופס */
-[data-testid="stForm"]{
-  background:var(--card);
-  border:1px solid #e2e8f0;
-  border-radius:16px;
-  padding:18px 20px;
-  box-shadow:0 8px 24px rgba(2,6,23,.06);
-}
-
-/* תוויות + נקודתיים מימין */
-[data-testid="stWidgetLabel"] p{
-  text-align:right; 
-  margin-bottom:.25rem; 
-  color:var(--muted); 
-}
-[data-testid="stWidgetLabel"] p::after{
-  content: " :";
-}
-
-/* שדות */
-input, textarea, select{ direction:rtl; text-align:right; }
-
 /* ===== כפתור הורדת Excel (XLSX) – כמו בתמונה ===== */
 .stDownloadButton > button{
-  background:#ffffff;
-  color:#111827;
+  display:flex; align-items:center; justify-content:center; gap:.6rem;
+  direction:rtl; text-align:right;
+  background:#ffffff; color:#111827;
   border:1px solid #e5e7eb;
   border-radius:12px;
   padding:.6rem 1rem;
@@ -70,6 +29,19 @@ input, textarea, select{ direction:rtl; text-align:right; }
   transform:translateY(-2px);
   box-shadow:0 8px 18px rgba(2,6,23,.09);
   background:#f9fafb;
+}
+
+/* אייקון ההורדה – ריבוע כחול עם חץ לבן בצד ימין */
+.stDownloadButton > button::after{
+  content:"";
+  width:22px; height:22px; border-radius:6px; flex:0 0 22px;
+  background:#3b82f6;                  /* כחול */
+  -webkit-mask: url('data:image/svg+xml;utf8,\
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white">\
+<path d="M12 3a1 1 0 0 1 1 1v8.586l2.293-2.293a1 1 0 1 1 1.414 1.414l-4 4a1 1 0 0 1-1.414 0l-4-4a1 1 0 1 1 1.414-1.414L11 12.586V4a1 1 0 0 1 1-1zM5 20a1 1 0 1 1 0-2h14a1 1 0 1 1 0 2H5z"/></svg>') center/14px 14px no-repeat;
+          mask: url('data:image/svg+xml;utf8,\
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white">\
+<path d="M12 3a1 1 0 0 1 1 1v8.586l2.293-2.293a1 1 0 1 1 1.414 1.414l-4 4a1 1 0 0 1-1.414 0l-4-4a1 1 0 1 1 1.414-1.414L11 12.586V4a1 1 0 0 1 1-1zM5 20a1 1 0 1 1 0-2h14a1 1 0 1 1 0 2H5z"/></svg>') center/14px 14px no-repeat;
 }
 </style>
 """, unsafe_allow_html=True)
