@@ -1,38 +1,25 @@
 
-# matcher_streamlit_beauty_rtl_v3.py
-# -*- coding: utf-8 -*-
 import streamlit as st
 import pandas as pd
 import numpy as np
+import re
 from dataclasses import dataclass
 from typing import Optional, Dict, Any, List
 
 st.set_page_config(page_title="מערכת שיבוץ סטודנטים – התאמה חכמה", layout="wide")
 
-# ====== עיצוב מודרני + RTL + הסתרת "Press Enter to apply" ======
+# ====== עיצוב מודרני + RTL (עם הסתרת "Press Enter to apply") ======
 st.markdown("""
 <style>
 @font-face {
   font-family:'David';
   src:url('https://example.com/David.ttf') format('truetype');
 }
-html, body, [class*="css"] {
-  font-family:'David',sans-serif!important;
-}
-
-/* ====== עיצוב מודרני + RTL ====== */
+html, body, [class*="css"] { font-family:'David',sans-serif!important; }
 :root{
-  --bg-1:#e0f7fa;
-  --bg-2:#ede7f6;
-  --bg-3:#fff3e0;
-  --bg-4:#fce4ec;
-  --bg-5:#e8f5e9;
-  --ink:#0f172a;
-  --primary:#9b5de5;
-  --primary-700:#f15bb5;
-  --ring:rgba(155,93,229,.35);
+  --bg-1:#e0f7fa; --bg-2:#ede7f6; --bg-3:#fff3e0; --bg-4:#fce4ec; --bg-5:#e8f5e9;
+  --ink:#0f172a; --primary:#9b5de5; --primary-700:#f15bb5; --ring:rgba(155,93,229,.35);
 }
-
 [data-testid="stAppViewContainer"]{
   background:
     radial-gradient(1200px 600px at 15% 10%, var(--bg-2) 0%, transparent 70%),
@@ -42,128 +29,91 @@ html, body, [class*="css"] {
     linear-gradient(135deg, var(--bg-1) 0%, #ffffff 100%) !important;
   color: var(--ink);
 }
-
 .main .block-container{
   background: rgba(255,255,255,.78);
   backdrop-filter: blur(10px);
   border:1px solid rgba(15,23,42,.08);
   box-shadow:0 15px 35px rgba(15,23,42,.08);
-  border-radius:24px;
-  padding:2.5rem;
-  margin-top:1rem;
+  border-radius:24px; padding:2.5rem; margin-top:1rem;
 }
-
-/* כותרות */
 h1,h2,h3,.stMarkdown h1,.stMarkdown h2{
-  text-align:center;
-  letter-spacing:.5px;
-  text-shadow:0 1px 2px rgba(255,255,255,.7);
-  font-weight:700;
-  color:#222;
-  margin-bottom:1rem;
+  text-align:center; letter-spacing:.5px; text-shadow:0 1px 2px rgba(255,255,255,.7);
+  font-weight:700; color:#222; margin-bottom:1rem;
 }
-
-/* כפתור */
 .stButton > button{
   background:linear-gradient(135deg,var(--primary) 0%,var(--primary-700) 100%)!important;
-  color:#fff!important;
-  border:none!important;
-  border-radius:18px!important;
-  padding:1rem 2rem!important;
-  font-size:1.1rem!important;
-  font-weight:600!important;
-  box-shadow:0 8px 18px var(--ring)!important;
-  transition:all .15s ease!important;
+  color:#fff!important; border:none!important; border-radius:18px!important;
+  padding:1rem 2rem!important; font-size:1.1rem!important; font-weight:600!important;
+  box-shadow:0 8px 18px var(--ring)!important; transition:all .15s ease!important;
 }
-.stButton > button:hover{
-  transform:translateY(-3px) scale(1.02);
-  filter:brightness(1.08);
-}
-.stButton > button:focus{
-  outline:none!important;
-  box-shadow:0 0 0 4px var(--ring)!important;
-}
-
-/* קלטים */
-div.stSelectbox > div,
-div.stMultiSelect > div,
-.stTextInput > div > div > input{
-  border-radius:14px!important;
-  border:1px solid rgba(15,23,42,.12)!important;
-  box-shadow:0 3px 10px rgba(15,23,42,.04)!important;
-  padding:.6rem .8rem!important;
-  color:var(--ink)!important;
-  font-size:1rem!important;
-}
-
-/* טאבים – רוחב קטן יותר */
-.stTabs [data-baseweb="tab"]{
-  border-radius:14px!important;
-  background:rgba(255,255,255,.65);
-  margin-inline-start:.3rem;
-  padding:.4rem .8rem;
-  font-weight:600;
-  min-width: 110px !important;
-  text-align:center;
-  font-size:0.9rem !important;
-}
-.stTabs [data-baseweb="tab"]:hover{
-  background:rgba(255,255,255,.9);
-}
-
-/* RTL */
-.stApp,.main,[data-testid="stSidebar"]{
-  direction:rtl;
-  text-align:right;
-}
-label,.stMarkdown,.stText,.stCaption{
-  text-align:right!important;
-}
-
-/* הסתרת טיפ "Press Enter to apply" */
+.stButton > button:hover{ transform:translateY(-3px) scale(1.02); filter:brightness(1.08); }
+.stButton > button:focus{ outline:none!important; box-shadow:0 0 0 4px var(--ring)!important; }
+.stApp,.main,[data-testid="stSidebar"]{ direction:rtl; text-align:right; }
+label,.stMarkdown,.stText,.stCaption{ text-align:right!important; }
 *[title="Press Enter to apply"]{ display:none !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# ====== 0) כותרת (Hero) ======
+# ====== כותרת ======
 st.markdown("<h1>מערכת שיבוץ סטודנטים – התאמה חכמה</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align:center;color:#475569;margin-top:-8px;'>כאן משבצים סטודנטים למקומות התמחות בקלות, בהתבסס על תחום, עיר ובקשות.</p>", unsafe_allow_html=True)
+st.markdown("<p style='text-align:center;color:#475569;margin-top:-8px;'>שיבוץ אוטומטי לפי תחום, עיר ובקשות – ללא הגדרות מסובכות.</p>", unsafe_allow_html=True)
 
-# ====== מודל ניקוד (ללא מרחק, ללא סליידרים) ======
+# ====== נתונים וניקוד ======
 @dataclass
 class Weights:
     w_field: float = 0.70
     w_city: float = 0.20
     w_special: float = 0.10
 
+# מילון שמות עמודות נפוצות
 STU_COLS = {
-    "id": ["מספר תעודת זהות", "תעודת זהות", "ת\"ז", "תז", "תעודת זהות הסטודנט", "מספר זהות"],
-    "first": ["שם פרטי","שם הסטודנט"],
-    "last": ["שם משפחה"],
-    "address": ["כתובת", "כתובת הסטודנט", "רחוב"],
-    "city": ["עיר מגורים", "עיר"],
-    "phone": ["טלפון", "מספר טלפון","נייד"],
-    "email": ["דוא\"ל", "דוא״ל", "אימייל", "כתובת אימייל", "כתובת מייל","מייל"],
-    "preferred_field": ["תחום מועדף","תחומים מועדפים","תחום רצוי"],
-    "special_req": ["בקשה מיוחדת","התחשבות"],
-    "partner": ["בן/בת זוג להכשרה", "בן\\בת זוג להכשרה", "בן/בת זוג", "בן\\בת זוג"]
-}
-SITE_COLS = {
-    "name": ["מוסד / שירות הכשרה", "מוסד", "שם מוסד ההתמחות","שם המוסד"],
-    "field": ["תחום ההתמחות", "תחום התמחות","תחום"],
-    "street": ["רחוב","כתובת"],
-    "city": ["עיר"],
-    "capacity": ["מספר סטודנטים שניתן לקלוט השנה", "מספר סטודנטים שניתן לקלוט", "קיבולת","כמות סטודנטים"],
-    "sup_first": ["שם פרטי"],
-    "sup_last": ["שם משפחה"],
-    "phone": ["טלפון","נייד"],
-    "email": ["אימייל", "כתובת מייל", "דוא\"ל", "דוא״ל","מייל"]
+    "id": ["מספר תעודת זהות","תעודת זהות","ת\"ז","ת.ז","תז","מספר זהות","מס' זהות","ID","id","student_id","ת\"ז הסטודנט","מספר תז"],
+    "first": ["שם פרטי","שם הסטודנט","פרטי"],
+    "last": ["שם משפחה","משפחה"],
+    "address": ["כתובת","כתובת הסטודנט","רחוב","כתובת מלאה"],
+    "city": ["עיר מגורים","עיר","ישוב","יישוב"],
+    "phone": ["טלפון","מספר טלפון","נייד","סלולרי","מס' טלפון"],
+    "email": ["דוא\"ל","דוא״ל","אימייל","מייל","דואר אלקטרוני","כתובת אימייל","כתובת מייל"],
+    "preferred_field": ["תחום מועדף","תחומים מועדפים","תחום רצוי","העדפת תחום"],
+    "special_req": ["בקשה מיוחדת","התחשבות","בקשות"],
+    "partner": ["בן/בת זוג להכשרה","בן\\בת זוג להכשרה","בן/בת זוג","בן\\בת זוג","בן זוג להכשרה","בת זוג להכשרה"]
 }
 
-def pick_col(df: pd.DataFrame, options: List[str]) -> Optional[str]:
+SITE_COLS = {
+    "name": ["מוסד / שירות הכשרה","מוסד","שם מוסד ההתמחות","שם המוסד","מקום ההתנסות","שם מקום ההתנסות","שם מקום ההתמחות","שם השירות","ארגון","שם ארגון"],
+    "field": ["תחום ההתמחות","תחום התמחות","תחום","תחומי התמחות"],
+    "street": ["רחוב","כתובת","כתובת מלאה"],
+    "city": ["עיר","ישוב","יישוב"],
+    "capacity": ["מספר סטודנטים שניתן לקלוט השנה","מספר סטודנטים שניתן לקלוט","קיבולת","כמות סטודנטים","מס' סטודנטים"],
+    "sup_first": ["שם פרטי","שם פרטי (מדריך)"],
+    "sup_last": ["שם משפחה","שם משפחה (מדריך)"],
+    "phone": ["טלפון","נייד","מס' טלפון"],
+    "email": ["אימייל","כתובת מייל","דוא\"ל","דוא״ל","מייל","דואר אלקטרוני"]
+}
+
+def norm(s: str) -> str:
+    return re.sub(r'\s+', ' ', str(s)).strip().lower().replace('\"','"')
+
+def pick_col_exact(df: pd.DataFrame, options: List[str]) -> Optional[str]:
     for opt in options:
-        if opt in df.columns: return opt
+        if opt in df.columns:
+            return opt
     return None
+
+def pick_col_fuzzy(df: pd.DataFrame, keywords: List[str]) -> Optional[str]:
+    cols = list(df.columns)
+    low = [norm(c) for c in cols]
+    keys = [norm(k) for k in keywords]
+    for i, c in enumerate(low):
+        for k in keys:
+            if k and k in c:
+                return cols[i]
+    return None
+
+def pick_col_smart(df: pd.DataFrame, options: List[str], fallback_keywords: List[str]) -> Optional[str]:
+    c = pick_col_exact(df, options)
+    if c: return c
+    return pick_col_fuzzy(df, fallback_keywords or options)
 
 def read_any(uploaded) -> pd.DataFrame:
     name = uploaded.name.lower()
@@ -194,84 +144,91 @@ def detect_site_type(name: str, field: str) -> str:
     if "חינוך" in (field or ""): return "חינוך"
     return "אחר"
 
-# ====== כלי מיפוי עמודות ======
-def auto_guess_map(df: pd.DataFrame, synonyms: Dict[str, List[str]]) -> Dict[str, Optional[str]]:
-    m = {}
-    for k, opts in synonyms.items():
-        m[k] = pick_col(df, opts)
-    return m
-
-def mapping_ui(df: pd.DataFrame, title: str, guess_map: Dict[str, Optional[str]], required_keys: List[str]) -> Dict[str, Optional[str]]:
-    st.write(f"**מיפוי עמודות – {title}** (אם צריך)")
-    cols = list(df.columns)
-    mapped = {}
-    for key, label in [
-        ("id","מספר זהות"), ("first","שם פרטי"), ("last","שם משפחה"),
-        ("address","כתובת"), ("city","עיר"), ("phone","טלפון"), ("email","אימייל"),
-        ("preferred_field","תחום מועדף"), ("special_req","בקשה מיוחדת"), ("partner","בן/בת זוג להכשרה"),
-    ] if title=="סטודנטים" else [
-        ("name","שם המוסד"), ("field","תחום התמחות"), ("street","רחוב/כתובת"),
-        ("city","עיר"), ("capacity","קיבולת"), ("sup_first","שם פרטי (מדריך)"),
-        ("sup_last","שם משפחה (מדריך)"), ("phone","טלפון"), ("email","אימייל"),
-    ]:
-        default = guess_map.get(key)
-        idx = cols.index(default) if (default in cols) else 0
-        options = ["— אין —"] + cols
-        sel = st.selectbox(f"{label}", options, index=(options.index(default) if default in options else 0), key=f"{title}_{key}")
-        mapped[key] = None if sel == "— אין —" else sel
-
-    # אזהרה על חסרים קריטיים
-    missing = [k for k in required_keys if not mapped.get(k)]
-    if missing:
-        st.warning("עמודות חסרות: " + ", ".join(missing) + ". אפשר להמשיך, אבל מומלץ למפות כדי לשפר את התוצאה.")
-    return mapped
-
-# ====== Resolve עם מיפוי בטוח ======
-def resolve_students(df: pd.DataFrame, m: Optional[Dict[str, Optional[str]]] = None) -> pd.DataFrame:
+# ====== Resolve ללא UI ======
+def resolve_students(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
-    def col(key): 
-        return m.get(key) if (m and m.get(key) in out.columns) else pick_col(out, STU_COLS.get(key, []))
-    def col_or_none(key):
-        c = col(key); return out[c] if c in out.columns else ""
-    out["stu_id"]    = col_or_none("id")
-    out["stu_first"] = col_or_none("first")
-    out["stu_last"]  = col_or_none("last")
-    out["stu_phone"] = col_or_none("phone")
-    out["stu_email"] = col_or_none("email")
-    out["stu_city"]  = col_or_none("city")
-    out["stu_address"] = col_or_none("address")
-    out["stu_pref"]  = col_or_none("preferred_field")
-    out["stu_req"]   = col_or_none("special_req")
-    out["stu_partner"]= col_or_none("partner")
+    # מזהי עמודות (חכם + תאימות)
+    id_col = pick_col_smart(out, STU_COLS["id"], ["זהות","ת\"ז","ת.ז","id"])
+    first_col = pick_col_smart(out, STU_COLS["first"], ["שם פרטי","שם"])
+    last_col  = pick_col_smart(out, STU_COLS["last"], ["שם משפחה"])
+    # מזהי עמודות נוספות
+    phone_col = pick_col_smart(out, STU_COLS["phone"], ["טלפון","נייד"])
+    email_col = pick_col_smart(out, STU_COLS["email"], ["מייל","דוא"])
+    city_col  = pick_col_smart(out, STU_COLS["city"], ["עיר","ישוב"])
+    addr_col  = pick_col_smart(out, STU_COLS["address"], ["כתובת","רחוב"])
+    pref_col  = pick_col_smart(out, STU_COLS["preferred_field"], ["תחום"])
+    req_col   = pick_col_smart(out, STU_COLS["special_req"], ["בקשה","התחשבות"])
+    partner_col = pick_col_smart(out, STU_COLS["partner"], ["בן","בת","זוג","הכשרה"])
+
+    # בנייה בטוחה (עם ברירות מחדל)
+    def safe(col, default=""):
+        return out[col] if col in out.columns else default
+
+    # fallback: זיהוי עמודת זהות ע"י דפוס 9 ספרות אם לא נמצא
+    if not id_col:
+        for c in out.columns:
+            ser = out[c].astype(str).str.replace(r'\D','', regex=True)
+            # בחר עמודה עם לפחות 60% ערכים בעלי 8-10 ספרות (כולל מוביל 0)
+            ok = (ser.str.match(r'^\d{8,10}$', na=False)).mean()
+            if ok >= 0.6:
+                id_col = c; break
+
+    out["stu_id"]    = safe(id_col, default=pd.Series(range(1, len(out)+1)))  # אם אין – מזהה מלאכותי
+    out["stu_first"] = safe(first_col)
+    out["stu_last"]  = safe(last_col)
+
+    # אם אין שם פרטי/משפחה אבל יש "שם" או "שם מלא" – פצלו
+    if (not first_col or not last_col):
+        full_col = pick_col_fuzzy(out, ["שם מלא","שם","שם סטודנט"])
+        if full_col:
+            parts = out[full_col].astype(str).str.strip().str.split(r"\s+", n=1, expand=True)
+            out["stu_first"] = out.get("stu_first","")
+            out["stu_last"]  = out.get("stu_last","")
+            out.loc[out["stu_first"].eq(""), "stu_first"] = parts[0]
+            out.loc[out["stu_last"].eq(""),  "stu_last"]  = parts[1].fillna("")
+
+    out["stu_phone"]   = safe(phone_col)
+    out["stu_email"]   = safe(email_col)
+    out["stu_city"]    = safe(city_col)
+    out["stu_address"] = safe(addr_col)
+    out["stu_pref"]    = safe(pref_col)
+    out["stu_req"]     = safe(req_col)
+    out["stu_partner"] = safe(partner_col)
+
     for c in ["stu_id","stu_first","stu_last","stu_phone","stu_email","stu_city","stu_address","stu_pref","stu_req","stu_partner"]:
         out[c] = out[c].apply(normalize_text)
     return out
 
-def resolve_sites(df: pd.DataFrame, m: Optional[Dict[str, Optional[str]]] = None) -> pd.DataFrame:
+def resolve_sites(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
-    def col(key): 
-        return m.get(key) if (m and m.get(key) in out.columns) else pick_col(out, SITE_COLS.get(key, []))
-    def col_or_none(key):
-        c = col(key); return out[c] if c in out.columns else ""
-    out["site_name"]   = col_or_none("name")
-    out["site_field"]  = col_or_none("field")
-    out["site_street"] = col_or_none("street")
-    out["site_city"]   = col_or_none("city")
-    cap = col("capacity")
-    out["site_capacity"] = pd.to_numeric(out[cap], errors="coerce").fillna(1).astype(int) if cap in out.columns else 1
+    name_col = pick_col_smart(out, SITE_COLS["name"], ["מוסד","שירות","מקום","התנסות","התמחות","שם"])
+    field_col= pick_col_smart(out, SITE_COLS["field"], ["תחום","התמחות"])
+    street_col=pick_col_smart(out, SITE_COLS["street"], ["כתובת","רחוב"])
+    city_col = pick_col_smart(out, SITE_COLS["city"], ["עיר","ישוב"])
+    cap_col  = pick_col_smart(out, SITE_COLS["capacity"], ["קיבולת","סטודנטים","כמות"])
+    supf_col = pick_col_smart(out, SITE_COLS["sup_first"], ["שם פרטי"])
+    supl_col = pick_col_smart(out, SITE_COLS["sup_last"], ["שם משפחה"])
+
+    def safe(col, default=""):
+        return out[col] if col in out.columns else default
+
+    out["site_name"]   = safe(name_col, default="מוסד ללא שם")
+    out["site_field"]  = safe(field_col)
+    out["site_street"] = safe(street_col)
+    out["site_city"]   = safe(city_col)
+    out["site_capacity"] = pd.to_numeric(safe(cap_col, default=1), errors="coerce").fillna(1).astype(int)
     out["capacity_left"] = out["site_capacity"].astype(int)
     out["site_type"] = out.apply(lambda r: detect_site_type(r.get("site_name"), r.get("site_field")), axis=1)
-    sup_first = col("sup_first"); sup_last = col("sup_last")
-    out["supervisor"] = ""
-    if (sup_first in out.columns) or (sup_last in out.columns):
-        ff = out[sup_first] if sup_first in out.columns else ""
-        ll = out[sup_last]  if sup_last  in out.columns else ""
-        out["supervisor"] = (ff.astype(str) + " " + ll.astype(str)).str.strip()
+    ff = safe(supf_col, ""); ll = safe(supl_col, "")
+    if isinstance(ff, pd.Series): ff = ff.astype(str)
+    if isinstance(ll, pd.Series): ll = ll.astype(str)
+    out["supervisor"] = (ff + " " + ll).str.strip() if isinstance(ff, pd.Series) else (str(ff) + " " + str(ll)).strip()
+
     for c in ["site_name","site_field","site_street","site_city","site_type","supervisor"]:
-        out[c] = out[c].apply(normalize_text)
+        out[c] = out[c].apply(normalize_text) if isinstance(out[c], pd.Series) else out[c]
     return out
 
-# ====== Scoring & Matching ======
+# ====== ניקוד ושיבוץ ======
 @dataclass
 class Weights:
     w_field: float = 0.70
@@ -282,27 +239,19 @@ def tokens(s: str) -> List[str]:
     return [t for t in str(s).replace(","," ").replace("/"," ").replace("-"," ").split() if t]
 
 def field_match_score(stu_pref: str, site_field: str) -> float:
-    if not stu_pref: 
-        return 50.0
-    sp = stu_pref.strip()
-    sf = site_field.strip()
-    if not sf:
-        return 40.0
-    if sp and sp in sf:
-        return 90.0
+    if not stu_pref: return 50.0
+    sp = stu_pref.strip(); sf = site_field.strip()
+    if not sf: return 40.0
+    if sp and sp in sf: return 90.0
     tp = set([w for w in tokens(sp) if len(w) > 1])
     tf = set([w for w in tokens(sf) if len(w) > 1])
-    if tp.intersection(tf):
-        return 75.0
+    if tp.intersection(tf): return 75.0
     return 45.0
 
 def special_req_score(req: str, site_type: str, same_city: bool) -> float:
-    if not req:
-        return 70.0
-    if "לא בבית חולים" in req and site_type == "בית חולים":
-        return 0.0
-    if "קרוב" in req:
-        return 90.0 if same_city else 55.0
+    if not req: return 70.0
+    if "לא בבית חולים" in req and site_type == "בית חולים": return 0.0
+    if "קרוב" in req: return 90.0 if same_city else 55.0
     return 75.0
 
 def compute_score(stu: pd.Series, site: pd.Series, W: Weights) -> float:
@@ -317,18 +266,13 @@ def find_partner_map(students_df: pd.DataFrame) -> Dict[str,str]:
     ids = set(students_df["stu_id"])
     m = {}
     for _, r in students_df.iterrows():
-        sid = r["stu_id"]
-        pid = r.get("stu_partner","")
-        if not pid: 
-            continue
-        if pid in ids and pid != sid:
-            m[sid] = pid
-            continue
+        sid = r["stu_id"]; pid = r.get("stu_partner","")
+        if not pid: continue
+        if pid in ids and pid != sid: m[sid] = pid; continue
         for _, r2 in students_df.iterrows():
             full = f"{r2.get('stu_first','')} {r2.get('stu_last','')}".strip()
             if pid and full and pid in full and r2["stu_id"] != sid:
-                m[sid] = r2["stu_id"]
-                break
+                m[sid] = r2["stu_id"]; break
     return m
 
 def candidate_table_for_student(stu: pd.Series, sites_df: pd.DataFrame, W: Weights) -> pd.DataFrame:
@@ -337,63 +281,45 @@ def candidate_table_for_student(stu: pd.Series, sites_df: pd.DataFrame, W: Weigh
     return tmp.sort_values(["score"], ascending=[False])
 
 def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, W: Weights) -> pd.DataFrame:
-    separate_couples = True
-    top_k = 10
-
-    def dec_cap(idx: int):
-        sites_df.at[idx, "capacity_left"] = int(sites_df.at[idx, "capacity_left"]) - 1
-
-    results = []
-    processed = set()
-    partner_map = find_partner_map(students_df)
+    separate_couples = True; top_k = 10
+    def dec_cap(idx: int): sites_df.at[idx, "capacity_left"] = int(sites_df.at[idx, "capacity_left"]) - 1
+    results=[]; processed=set(); partner_map=find_partner_map(students_df)
 
     # Couples first
     for _, s in students_df.iterrows():
-        sid = s["stu_id"]
-        if sid in processed: 
-            continue
-        pid = partner_map.get(sid)
-        if pid and partner_map.get(pid) == sid:
-            partner_row = students_df[students_df["stu_id"] == pid]
-            if partner_row.empty:
-                continue
-            s2 = partner_row.iloc[0]
-            cand1 = candidate_table_for_student(s, sites_df[sites_df["capacity_left"]>0], W).head(top_k)
-            cand2 = candidate_table_for_student(s2, sites_df[sites_df["capacity_left"]>0], W).head(top_k)
-            best = (-1.0, None, None)
-            for i1, r1 in cand1.iterrows():
-                for i2, r2 in cand2.iterrows():
-                    if i1 == i2:
-                        continue
-                    if separate_couples and r1.get("supervisor") and r1.get("supervisor") == r2.get("supervisor"):
-                        continue
-                    sc = float(r1["score"]) + float(r2["score"])
-                    if sc > best[0]:
-                        best = (sc, i1, i2)
-            if best[1] is not None and best[2] is not None:
-                rsite1 = sites_df.loc[best[1]]
-                rsite2 = sites_df.loc[best[2]]
+        sid=s["stu_id"]
+        if sid in processed: continue
+        pid=partner_map.get(sid)
+        if pid and partner_map.get(pid)==sid:
+            r2 = students_df[students_df["stu_id"]==pid]
+            if r2.empty: continue
+            s2=r2.iloc[0]
+            c1=candidate_table_for_student(s, sites_df[sites_df["capacity_left"]>0], W).head(top_k)
+            c2=candidate_table_for_student(s2, sites_df[sites_df["capacity_left"]>0], W).head(top_k)
+            best=(-1.0,None,None)
+            for i1, r1 in c1.iterrows():
+                for i2, r2 in c2.iterrows():
+                    if i1==i2: continue
+                    if separate_couples and r1.get("supervisor") and r1.get("supervisor")==r2.get("supervisor"): continue
+                    sc=float(r1["score"])+float(r2["score"])
+                    if sc>best[0]: best=(sc,i1,i2)
+            if best[1] is not None:
+                rsite1=sites_df.loc[best[1]]; rsite2=sites_df.loc[best[2]]
                 dec_cap(best[1]); dec_cap(best[2])
-                results.append((s, rsite1))
-                results.append((s2, rsite2))
+                results.append((s,rsite1)); results.append((s2,rsite2))
                 processed.add(sid); processed.add(pid)
 
     # Singles
     for _, s in students_df.iterrows():
-        sid = s["stu_id"]
-        if sid in processed: 
-            continue
-        cand = candidate_table_for_student(s, sites_df[sites_df["capacity_left"]>0], W).head(top_k)
-        if not cand.empty:
-            chosen_idx = cand.index[0]
-            rsite = sites_df.loc[chosen_idx]
-            dec_cap(chosen_idx)
-            results.append((s, rsite))
-            processed.add(sid)
+        sid=s["stu_id"]
+        if sid in processed: continue
+        c=candidate_table_for_student(s, sites_df[sites_df["capacity_left"]>0], W).head(top_k)
+        if not c.empty:
+            idx=c.index[0]; r=sites_df.loc[idx]
+            dec_cap(idx); results.append((s,r)); processed.add(sid)
 
-    rows = []
-    for s, r in results:
-        score = compute_score(s, r, W)
+    rows=[]
+    for s,r in results:
         rows.append({
             "ת\"ז הסטודנט": s.get("stu_id"),
             "שם פרטי": s.get("stu_first"),
@@ -402,15 +328,15 @@ def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, W: Weights) 
             "עיר": s.get("stu_city"),
             "מספר טלפון": s.get("stu_phone"),
             "אימייל": s.get("stu_email"),
-            "אחוז התאמה": round(score, 1),
+            "אחוז התאמה": round(compute_score(s,r,W),1),
             "שם מקום ההתמחות": r.get("site_name"),
             "עיר המוסד": r.get("site_city"),
             "סוג מקום השיבוץ": r.get("site_type"),
             "תחום ההתמחות במוסד": r.get("site_field"),
         })
-    out = pd.DataFrame(rows)
-    desired = ["ת\"ז הסטודנט","שם פרטי","שם משפחה","כתובת","עיר","מספר טלפון","אימייל",
-               "אחוז התאמה","שם מקום ההתמחות","עיר המוסד","סוג מקום השיבוץ","תחום ההתמחות במוסד"]
+    out=pd.DataFrame(rows)
+    desired=["ת\"ז הסטודנט","שם פרטי","שם משפחה","כתובת","עיר","מספר טלפון","אימייל",
+             "אחוז התאמה","שם מקום ההתמחות","עיר המוסד","סוג מקום השיבוץ","תחום ההתמחות במוסד"]
     return out[[c for c in desired if c in out.columns]]
 
 W = Weights()
@@ -418,12 +344,10 @@ W = Weights()
 # ====== 1) הוראות שימוש ======
 st.markdown("## 📘 הוראות שימוש")
 st.markdown("""
-1. **קובץ סטודנטים (CSV/XLSX):** שם פרטי, שם משפחה, תעודת זהות, כתובת/עיר, טלפון, אימייל.  
-   אופציונלי: תחום מועדף, בקשה מיוחדת, בן/בת זוג להכשרה.
-2. **קובץ אתרים/מדריכים (CSV/XLSX):** מוסד/שירות, תחום התמחות, רחוב, עיר, מספר סטודנטים שניתן לקלוט השנה.  
-   אופציונלי: שם פרטי+שם משפחה של המדריך, טלפון, אימייל.
-3. לחיצה על **בצע שיבוץ** תחשב *אחוז התאמה* לפי תחום (70%), עיר (20%), בקשות (10%), כולל הפרדת בני/בנות זוג ואכיפת קיבולת.
-4. בסוף ניתן להוריד את קובץ התוצאות.
+1. הכינו **קובץ סטודנטים** (CSV/XLSX) ושמרו שמות עמודות נפוצים (למשל: ת\"ז, שם פרטי, שם משפחה, עיר, כתובת, טלפון, אימייל...).  
+2. הכינו **קובץ אתרים/מדריכים** (CSV/XLSX) עם: שם מוסד/שירות, תחום התמחות, כתובת/רחוב, עיר, קיבולת.  
+3. לחצו **בצע שיבוץ** והורידו את קובץ התוצאות.  
+**הערה:** המערכת מזהה אוטומטית שם-עמודות (כולל וריאציות), ואם חסר — תשתמש בברירת מחדל כדי לא לקטוע את התהליך.
 """)
 
 # ====== 2) דוגמה לשימוש ======
@@ -456,11 +380,13 @@ colA, colB = st.columns(2, gap="large")
 with colA:
     students_file = st.file_uploader("קובץ סטודנטים", type=["csv","xlsx","xls"], key="students_file")
     if students_file is not None:
-        st.caption("הצצה ל-5 הרשומות הראשונות:")
         try:
             df_students_raw = read_any(students_file)
+            drop_cols = [c for c in df_students_raw.columns if str(c).startswith("Unnamed")]
+            df_students_raw.drop(columns=drop_cols, inplace=True, errors="ignore")
+            st.caption("הצצה ל-5 הרשומות הראשונות:")
             st.dataframe(df_students_raw.head(5), use_container_width=True)
-        except Exception:
+        except Exception as e:
             st.error("לא ניתן לקרוא את הקובץ.")
             df_students_raw = None
     else:
@@ -469,30 +395,17 @@ with colA:
 with colB:
     sites_file = st.file_uploader("קובץ אתרי התמחות/מדריכים", type=["csv","xlsx","xls"], key="sites_file")
     if sites_file is not None:
-        st.caption("הצצה ל-5 הרשומות הראשונות:")
         try:
             df_sites_raw = read_any(sites_file)
+            drop_cols = [c for c in df_sites_raw.columns if str(c).startswith("Unnamed")]
+            df_sites_raw.drop(columns=drop_cols, inplace=True, errors="ignore")
+            st.caption("הצצה ל-5 הרשומות הראשונות:")
             st.dataframe(df_sites_raw.head(5), use_container_width=True)
-        except Exception:
+        except Exception as e:
             st.error("לא ניתן לקרוא את הקובץ.")
             df_sites_raw = None
     else:
         df_sites_raw = None
-
-# ====== 3.1) מיפוי עמודות (כדי למנוע KeyError) ======
-if df_students_raw is not None:
-    st.markdown("### 🧩 מיפוי עמודות – סטודנטים (אם צריך)")
-    guess_s = auto_guess_map(df_students_raw, STU_COLS)
-    map_students = mapping_ui(df_students_raw, "סטודנטים", guess_s, required_keys=["id","first","last"])
-else:
-    map_students = {}
-
-if df_sites_raw is not None:
-    st.markdown("### 🧩 מיפוי עמודות – אתרים/מדריכים (אם צריך)")
-    guess_t = auto_guess_map(df_sites_raw, SITE_COLS)
-    map_sites = mapping_ui(df_sites_raw, "אתרים", guess_t, required_keys=["name","field","city"])
-else:
-    map_sites = {}
 
 # ====== 4) שיבוץ ======
 st.markdown("## ⚙️ ביצוע השיבוץ")
@@ -503,22 +416,11 @@ if run_btn:
     if df_students_raw is None or df_sites_raw is None:
         st.error("נא להעלות את שני הקבצים לפני הפעלת השיבוץ.")
     else:
-        try:
-            for df in (df_students_raw, df_sites_raw):
-                drop_cols = [c for c in df.columns if str(c).startswith("Unnamed")]
-                df.drop(columns=drop_cols, inplace=True, errors="ignore")
-            students = resolve_students(df_students_raw, map_students)
-            sites = resolve_sites(df_sites_raw, map_sites)
-            # בדיקת שדות זהות/שם
-            if students["stu_id"].eq("").all() or students["stu_first"].eq("").all() or students["stu_last"].eq("").all():
-                st.error("עמודות חובה לסטודנטים חסרות או לא ממופות (ת\"ז, שם פרטי, שם משפחה). נא למפות בעזרת 'מיפוי עמודות – סטודנטים'.")
-            elif sites["site_name"].eq("").all() or sites["site_field"].eq("").all() or sites["site_city"].eq("").all():
-                st.error("עמודות חובה לאתרים חסרות או לא ממופות (שם מוסד, תחום התמחות, עיר). נא למפות בעזרת 'מיפוי עמודות – אתרים'.")
-            else:
-                result_df = greedy_match(students, sites, W)
-                st.success("השיבוץ הושלם ✓")
-        except Exception as e:
-            st.exception(e)
+        students = resolve_students(df_students_raw)
+        sites = resolve_sites(df_sites_raw)
+        # אפשר להמשיך גם אם חסרים שדות; אם אין site_city בכלל – יינתן ניקוד ברירת מחדל לעיר
+        result_df = greedy_match(students, sites, Weights())
+        st.success("השיבוץ הושלם ✓")
 
 # ====== 5) תוצאות ======
 st.markdown("## 📊 תוצאות השיבוץ")
