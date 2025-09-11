@@ -1,5 +1,5 @@
 
-# matcher_streamlit_beauty_rtl.py
+# matcher_streamlit_beauty_rtl_v2.py
 # -*- coding: utf-8 -*-
 import streamlit as st
 import pandas as pd
@@ -33,7 +33,6 @@ html, body, [class*="css"] {
   --ring:rgba(155,93,229,.35);
 }
 
-/* רקע וטופ-קונטיינר */
 [data-testid="stAppViewContainer"]{
   background:
     radial-gradient(1200px 600px at 15% 10%, var(--bg-2) 0%, transparent 70%),
@@ -43,6 +42,7 @@ html, body, [class*="css"] {
     linear-gradient(135deg, var(--bg-1) 0%, #ffffff 100%) !important;
   color: var(--ink);
 }
+
 .main .block-container{
   background: rgba(255,255,255,.78);
   backdrop-filter: blur(10px);
@@ -120,16 +120,16 @@ label,.stMarkdown,.stText,.stCaption{
   text-align:right!important;
 }
 
-/* הסתרת טיפ "Press Enter to apply" אם מופיע כ-title */
+/* הסתרת טיפ "Press Enter to apply" */
 *[title="Press Enter to apply"]{ display:none !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# ====== מבנה מסך: 1) כותרת (Hero) ======
+# ====== 0) כותרת (Hero) ======
 st.markdown("<h1>מערכת שיבוץ סטודנטים – התאמה חכמה</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align:center;color:#475569;margin-top:-8px;'>העלו שני קבצים (סטודנטים ואתרי התמחות), בצעו שיבוץ אוטומטי – פשוט ומסודר.</p>", unsafe_allow_html=True)
+st.markdown("<p style='text-align:center;color:#475569;margin-top:-8px;'>כאן משבצים סטודנטים למקומות התמחות בקלות, בהתבסס על תחום, עיר ובקשות.</p>", unsafe_allow_html=True)
 
-# ====== לוגיקה ותשתית ======
+# ====== מודל ניקוד (ללא מרחק, ללא סליידרים) ======
 @dataclass
 class Weights:
     w_field: float = 0.70
@@ -380,7 +380,31 @@ st.markdown("""
 4. בסוף ניתן להוריד את קובץ התוצאות.
 """)
 
-# ====== 2) העלאת קבצים ======
+# ====== 2) דוגמה לשימוש (נעה לפני ההעלאה) ======
+st.markdown("## 🧪 דוגמה לשימוש")
+example_students = pd.DataFrame([
+    {"שם פרטי":"רות", "שם משפחה":"כהן", "תעודת זהות":"123456789", "כתובת":"הרצל 12", "עיר מגורים":"תל אביב", "טלפון":"0501111111", "דוא\"ל":"ruth@example.com", "תחום מועדף":"בריאות הנפש"},
+    {"שם פרטי":"יואב", "שם משפחה":"לוי", "תעודת זהות":"987654321", "כתובת":"דיזנגוף 80", "עיר מגורים":"תל אביב", "טלפון":"0502222222", "דוא\"ל":"yoav@example.com", "תחום מועדף":"רווחה"}
+])
+example_sites = pd.DataFrame([
+    {"מוסד / שירות הכשרה":"מרכז חוסן תל אביב", "תחום ההתמחות":"בריאות הנפש", "רחוב":"אבן גבירול 1", "עיר":"תל אביב", "מספר סטודנטים שניתן לקלוט השנה":2},
+    {"מוסד / שירות הכשרה":"מחלקת רווחה רמת גן", "תחום ההתמחות":"רווחה", "רחוב":"ביאליק 10", "עיר":"רמת גן", "מספר סטודנטים שניתן לקלוט השנה":1},
+])
+colX, colY = st.columns(2, gap="large")
+with colX:
+    st.write("**דוגמה – סטודנטים**")
+    st.dataframe(example_students, use_container_width=True)
+    st.download_button("⬇️ הורדת דוגמת סטודנטים (CSV)",
+                       data=example_students.to_csv(index=False, encoding="utf-8-sig"),
+                       file_name="students_example.csv", mime="text/csv")
+with colY:
+    st.write("**דוגמה – אתרי התמחות/מדריכים**")
+    st.dataframe(example_sites, use_container_width=True)
+    st.download_button("⬇️ הורדת דוגמת אתרים (CSV)",
+                       data=example_sites.to_csv(index=False, encoding="utf-8-sig"),
+                       file_name="sites_example.csv", mime="text/csv")
+
+# ====== 3) העלאת קבצים ======
 st.markdown("## 📤 העלאת קבצים")
 colA, colB = st.columns(2, gap="large")
 with colA:
@@ -409,30 +433,6 @@ with colB:
     else:
         df_sites_raw = None
 
-# ====== 3) דוגמה לשימוש ======
-st.markdown("## 🧪 דוגמה לשימוש")
-example_students = pd.DataFrame([
-    {"שם פרטי":"רות", "שם משפחה":"כהן", "תעודת זהות":"123456789", "כתובת":"הרצל 12", "עיר מגורים":"תל אביב", "טלפון":"0501111111", "דוא\"ל":"ruth@example.com", "תחום מועדף":"בריאות הנפש"},
-    {"שם פרטי":"יואב", "שם משפחה":"לוי", "תעודת זהות":"987654321", "כתובת":"דיזנגוף 80", "עיר מגורים":"תל אביב", "טלפון":"0502222222", "דוא\"ל":"yoav@example.com", "תחום מועדף":"רווחה"}
-])
-example_sites = pd.DataFrame([
-    {"מוסד / שירות הכשרה":"מרכז חוסן תל אביב", "תחום ההתמחות":"בריאות הנפש", "רחוב":"אבן גבירול 1", "עיר":"תל אביב", "מספר סטודנטים שניתן לקלוט השנה":2},
-    {"מוסד / שירות הכשרה":"מחלקת רווחה רמת גן", "תחום ההתמחות":"רווחה", "רחוב":"ביאליק 10", "עיר":"רמת גן", "מספר סטודנטים שניתן לקלוט השנה":1},
-])
-colX, colY = st.columns(2, gap="large")
-with colX:
-    st.write("**דוגמה – סטודנטים**")
-    st.dataframe(example_students, use_container_width=True)
-    st.download_button("⬇️ הורדת דוגמת סטודנטים (CSV)",
-                       data=example_students.to_csv(index=False, encoding="utf-8-sig"),
-                       file_name="students_example.csv", mime="text/csv")
-with colY:
-    st.write("**דוגמה – אתרי התמחות/מדריכים**")
-    st.dataframe(example_sites, use_container_width=True)
-    st.download_button("⬇️ הורדת דוגמת אתרים (CSV)",
-                       data=example_sites.to_csv(index=False, encoding="utf-8-sig"),
-                       file_name="sites_example.csv", mime="text/csv")
-
 # ====== 4) שיבוץ ======
 st.markdown("## ⚙️ ביצוע השיבוץ")
 run_btn = st.button("🚀 בצע שיבוץ", use_container_width=True)
@@ -446,71 +446,8 @@ if run_btn:
             for df in (df_students_raw, df_sites_raw):
                 drop_cols = [c for c in df.columns if str(c).startswith("Unnamed")]
                 df.drop(columns=drop_cols, inplace=True, errors="ignore")
-            # Resolve
-            def tokens(s: str) -> List[str]:
-                return [t for t in str(s).replace(","," ").replace("/"," ").replace("-"," ").split() if t]
             students = resolve_students(df_students_raw)
             sites = resolve_sites(df_sites_raw)
-            # Matching
-            def candidate_table_for_student(stu: pd.Series, sites_df: pd.DataFrame, W: Weights) -> pd.DataFrame:
-                tmp = sites_df.copy()
-                tmp["score"] = tmp.apply(lambda r: compute_score(stu, r, W), axis=1)
-                return tmp.sort_values(["score"], ascending=[False])
-            def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, W: Weights) -> pd.DataFrame:
-                separate_couples = True; top_k = 10
-                def dec_cap(i): sites_df.at[i,"capacity_left"]=int(sites_df.at[i,"capacity_left"])-1
-                results=[]; processed=set(); partner_map=find_partner_map(students_df)
-                # couples
-                for _, s in students_df.iterrows():
-                    sid=s["stu_id"]
-                    if sid in processed: continue
-                    pid=partner_map.get(sid)
-                    if pid and partner_map.get(pid)==sid:
-                        r2 = students_df[students_df["stu_id"]==pid]
-                        if r2.empty: continue
-                        s2=r2.iloc[0]
-                        c1=candidate_table_for_student(s, sites_df[sites_df["capacity_left"]>0], W).head(top_k)
-                        c2=candidate_table_for_student(s2, sites_df[sites_df["capacity_left"]>0], W).head(top_k)
-                        best=(-1.0,None,None)
-                        for i1,r1 in c1.iterrows():
-                            for i2,r2 in c2.iterrows():
-                                if i1==i2: continue
-                                if r1.get("supervisor") and r1.get("supervisor")==r2.get("supervisor"): continue
-                                sc=float(r1["score"])+float(r2["score"])
-                                if sc>best[0]: best=(sc,i1,i2)
-                        if best[1] is not None:
-                            rsite1=sites_df.loc[best[1]]; rsite2=sites_df.loc[best[2]]
-                            dec_cap(best[1]); dec_cap(best[2])
-                            results.append((s,rsite1)); results.append((s2,rsite2))
-                            processed.add(sid); processed.add(pid)
-                # singles
-                for _, s in students_df.iterrows():
-                    sid=s["stu_id"]
-                    if sid in processed: continue
-                    c=candidate_table_for_student(s, sites_df[sites_df["capacity_left"]>0], W).head(top_k)
-                    if not c.empty:
-                        idx=c.index[0]; r=sites_df.loc[idx]
-                        dec_cap(idx); results.append((s,r)); processed.add(sid)
-                rows=[]
-                for s,r in results:
-                    rows.append({
-                        "ת\"ז הסטודנט": s.get("stu_id"),
-                        "שם פרטי": s.get("stu_first"),
-                        "שם משפחה": s.get("stu_last"),
-                        "כתובת": s.get("stu_address"),
-                        "עיר": s.get("stu_city"),
-                        "מספר טלפון": s.get("stu_phone"),
-                        "אימייל": s.get("stu_email"),
-                        "אחוז התאמה": round(compute_score(s,r,W),1),
-                        "שם מקום ההתמחות": r.get("site_name"),
-                        "עיר המוסד": r.get("site_city"),
-                        "סוג מקום השיבוץ": r.get("site_type"),
-                        "תחום ההתמחות במוסד": r.get("site_field"),
-                    })
-                out=pd.DataFrame(rows)
-                desired=["ת\"ז הסטודנט","שם פרטי","שם משפחה","כתובת","עיר","מספר טלפון","אימייל",
-                         "אחוז התאמה","שם מקום ההתמחות","עיר המוסד","סוג מקום השיבוץ","תחום ההתמחות במוסד"]
-                return out[[c for c in desired if c in out.columns]]
             result_df = greedy_match(students, sites, W)
             st.success("השיבוץ הושלם ✓")
         except Exception as e:
