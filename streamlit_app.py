@@ -1,30 +1,29 @@
 
-# matcher_streamlit_xlsx_csv_styled_v2.py
+# matcher_streamlit_clean.py
 # -*- coding: utf-8 -*-
 import streamlit as st
 import pandas as pd
 import numpy as np
-from math import radians, sin, cos, asin, sqrt
 from dataclasses import dataclass
-from typing import Tuple, Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List
 
-st.set_page_config(page_title="מערכת שיבוץ סטודנטים – התאמה חכמה", layout="wide")
+# ---------------- Page & Style ----------------
+st.set_page_config(page_title="מערכת שיבוץ סטודנטים – נקי ומודרני", layout="wide")
 
-# --- Exact style snippet (as requested) ---
 st.markdown("""
 <style>
 :root{
-  --ink:#0f172a; 
-  --muted:#475569; 
-  --ring:rgba(99,102,241,.25); 
-  --card:rgba(255,255,255,.85);
+  --ink:#0f172a;
+  --muted:#475569;
+  --card:rgba(255,255,255,.86);
+  --ring:rgba(99,102,241,.25);
 }
 
-/* RTL + פונטים */
-html, body, [class*="css"] { font-family: system-ui, "Segoe UI", Arial; }
-.stApp, .main, [data-testid="stSidebar"]{ direction:rtl; text-align:right; }
+/* RTL + base fonts */
+html, body, [class*="css"]{ font-family: system-ui, "Segoe UI", Arial; }
+.stApp, .main{ direction:rtl; text-align:right; }
 
-/* רקע */
+/* Background */
 [data-testid="stAppViewContainer"]{
   background:
     radial-gradient(1200px 600px at 8% 8%, #e0f7fa 0%, transparent 65%),
@@ -33,41 +32,44 @@ html, body, [class*="css"] { font-family: system-ui, "Segoe UI", Arial; }
 }
 .block-container{ padding-top:1.1rem; }
 
-/* מסגרת לטופס */
-[data-testid="stForm"]{
+/* Centered card */
+.center-card{
   background:var(--card);
   border:1px solid #e2e8f0;
-  border-radius:16px;
-  padding:18px 20px;
-  box-shadow:0 8px 24px rgba(2,6,23,.06);
+  border-radius:18px;
+  padding:22px 22px;
+  box-shadow:0 10px 28px rgba(2,6,23,.08);
 }
+.center-wrap{ max-width:900px; margin:24px auto; }
 
-/* תוויות + נקודתיים מימין */
-[data-testid="stWidgetLabel"] p{
-  text-align:right; 
-  margin-bottom:.25rem; 
-  color:var(--muted); 
-}
-[data-testid="stWidgetLabel"] p::after{
-  content: " :";
-}
+h1,h2,h3{ color:var(--ink); }
+.small-muted{ color:var(--muted); font-size:.9rem; }
 
-/* שדות */
-input, textarea, select{ direction:rtl; text-align:right; }
+/* Inputs inside forms */
+[data-testid="stForm"] .stButton>button{
+  border-radius:12px;
+  padding:.6rem 1rem;
+  box-shadow:0 8px 14px rgba(99,102,241,.18);
+}
+[data-testid="stForm"] input, [data-testid="stForm"] select{ direction:rtl; text-align:right; }
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🏷️ מערכת שיבוץ סטודנטים – התאמה לפי מרחק, תחום והעדפות")
-st.caption("מחשב מרחקים, ניקוד התאמה ושיבוץ מתוך קבצי CSV/XLSX של סטודנטים ואתרי התמחות.")
+st.markdown("""
+<div class="center-wrap">
+  <h1>🏷️ מערכת שיבוץ סטודנטים – התאמה חכמה</h1>
+  <p class="small-muted">העלו שני קבצים (סטודנטים ואתרי התמחות) ובצעו שיבוץ אוטומטי. ללא פרמטרים מסובכים.</p>
+</div>
+""", unsafe_allow_html=True)
 
-# ================= Models & Mappers =================
+# ---------------- Column synonyms & structures ----------------
 @dataclass
 class Weights:
-    w_distance: float = 0.7
-    w_preferred_field: float = 0.2
-    w_special_request: float = 0.1
+    # fixed weights (no sliders in UI)
+    w_field: float = 0.70    # התאמה לתחום
+    w_city: float = 0.20     # התאמת עיר
+    w_special: float = 0.10  # בקשות מיוחדות
 
-# Possible column names (Hebrew variants)
 STU_COLS = {
     "id": ["מספר תעודת זהות", "תעודת זהות", "ת\"ז", "תז", "תעודת זהות הסטודנט"],
     "first": ["שם פרטי"],
@@ -78,7 +80,6 @@ STU_COLS = {
     "email": ["דוא\"ל", "דוא״ל", "אימייל", "כתובת אימייל", "כתובת מייל"],
     "preferred_field": ["תחום מועדף","תחומים מועדפים"],
     "special_req": ["בקשה מיוחדת"],
-    "mobility": ["ניידות"],
     "partner": ["בן/בת זוג להכשרה", "בן\\בת זוג להכשרה", "בן/בת זוג", "בן\\בת זוג"]
 }
 
@@ -96,178 +97,65 @@ SITE_COLS = {
 
 def pick_col(df: pd.DataFrame, options: List[str]) -> Optional[str]:
     for opt in options:
-        if opt in df.columns:
-            return opt
+        if opt in df.columns: return opt
     return None
 
-def get_val(row: pd.Series, df: pd.DataFrame, synonyms: Dict[str, List[str]], key: str, default: Any = None):
-    col = pick_col(df, synonyms.get(key, []))
-    return row.get(col, default) if col else default
+def read_any(uploaded) -> pd.DataFrame:
+    name = uploaded.name.lower()
+    if name.endswith(".csv"):
+        return pd.read_csv(uploaded, encoding="utf-8-sig")
+    if name.endswith(".xlsx") or name.endswith(".xls"):
+        return pd.read_excel(uploaded)
+    try:
+        return pd.read_excel(uploaded)
+    except Exception:
+        return pd.read_csv(uploaded, encoding="utf-8-sig")
 
-def build_student_address(row: pd.Series, df: pd.DataFrame) -> str:
-    addr = str(get_val(row, df, STU_COLS, "address", "") or "").strip()
-    city = str(get_val(row, df, STU_COLS, "city", "") or "").strip()
-    if addr and city and city not in addr:
-        return f"{addr}, {city}, ישראל"
-    if addr:
-        return f"{addr}, ישראל"
-    if city:
-        return f"{city}, ישראל"
-    return ""
-
-def build_site_address(row: pd.Series, df: pd.DataFrame) -> str:
-    name = str(get_val(row, df, SITE_COLS, "name", "") or "").strip()
-    street = str(get_val(row, df, SITE_COLS, "street", "") or "").strip()
-    city = str(get_val(row, df, SITE_COLS, "city", "") or "").strip()
-    return ", ".join([p for p in [name, street, city, "ישראל"] if p])
+def normalize_text(x: Any) -> str:
+    if x is None: return ""
+    return str(x).strip()
 
 def detect_site_type(name: str, field: str) -> str:
-    text = f"{name or ''} {field or ''}".replace("־", " ").replace("-", " ").lower()
-    rules = [
-        ("כלא", "כלא"),
-        ("בית סוהר", "כלא"),
-        ("בית חולים", "בית חולים"),
-        ("מרכז רפואי", "בית חולים"),
-        ("מרפאה", "בריאות"),
-        ("בי\"ס", "בית ספר"),
-        ("בית ספר", "בית ספר"),
-        ("תיכון", "בית ספר"),
-        ("גן", "גן ילדים"),
-        ("מרכז קהילתי", "קהילה"),
-        ("רווחה", "רווחה"),
-        ("חוסן", "בריאות הנפש"),
-        ("בריאות הנפש", "בריאות הנפש"),
-    ]
-    for key, val in rules:
-        if key in text:
-            return val
-    if "חינוך" in (field or ""):
-        return "חינוך"
+    text = f"{name or ''} {field or ''}".replace("־"," ").replace("-"," ").lower()
+    pairs = [("כלא","כלא"),("בית סוהר","כלא"),
+             ("בית חולים","בית חולים"),("מרכז רפואי","בית חולים"),
+             ("מרפאה","בריאות"),
+             ("בי\"ס","בית ספר"),("בית ספר","בית ספר"),("תיכון","בית ספר"),
+             ("גן","גן ילדים"),
+             ("מרכז קהילתי","קהילה"),("רווחה","רווחה"),
+             ("חוסן","בריאות הנפש"),("בריאות הנפש","בריאות הנפש")]
+    for k,v in pairs:
+        if k in text: return v
+    if "חינוך" in (field or ""): return "חינוך"
     return "אחר"
 
-# ================= Distance (Haversine) =================
-def haversine(lat1, lon1, lat2, lon2) -> float:
-    vals = [lat1, lon1, lat2, lon2]
-    if any(v is None for v in vals) or any(pd.isna(v) for v in vals):
-        return np.nan
-    lon1, lat1, lon2, lat2 = map(radians, [lon1, lat1, lon2, lat2])
-    dlon = lon2 - lon1 
-    dlat = lat2 - lat1 
-    a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
-    c = 2 * asin(sqrt(a)) 
-    r = 6371
-    return c * r
-
-# ================= Geocoding (optional) =================
-_GEOCODER = None
-_CACHE: Dict[str, Tuple[Optional[float], Optional[float]]] = {}
-
-def _ensure_geocoder():
-    global _GEOCODER
-    if _GEOCODER is None:
-        try:
-            from geopy.geocoders import Nominatim
-            from geopy.extra.rate_limiter import RateLimiter
-            geolocator = Nominatim(user_agent="student-matcher")
-            _GEOCODER = RateLimiter(geolocator.geocode, min_delay_seconds=1)
-        except Exception:
-            _GEOCODER = None
-
-def geocode(addr: str, allow_online: bool) -> Tuple[Optional[float], Optional[float]]:
-    if not isinstance(addr, str) or not addr.strip():
-        return (None, None)
-    if addr in _CACHE:
-        return _CACHE[addr]
-    lat, lon = None, None
-    if allow_online:
-        _ensure_geocoder()
-        if _GEOCODER:
-            try:
-                loc = _GEOCODER(addr)
-                if loc:
-                    lat, lon = loc.latitude, loc.longitude
-            except Exception:
-                lat, lon = None, None
-    _CACHE[addr] = (lat, lon)
-    return lat, lon
-
-def ensure_latlon(df: pd.DataFrame, addr_col: str, prefix: str, allow_online: bool) -> pd.DataFrame:
-    lat_col, lon_col = f"{prefix}_lat", f"{prefix}_lon"
-    if lat_col in df.columns and lon_col in df.columns:
-        return df
-    df[lat_col], df[lon_col] = None, None
-    for i, row in df.iterrows():
-        addr = row.get(addr_col, "")
-        lat, lon = geocode(addr, allow_online)
-        df.at[i, lat_col] = lat
-        df.at[i, lon_col] = lon
-    return df
-
-def normalize_distance_score(km: float, max_km: float) -> float:
-    if pd.isna(km):
-        return 0.0
-    if km <= 0:
-        return 100.0
-    if km >= max_km:
-        return 0.0
-    return (1 - (km / max_km)) * 100.0
-
-def compute_score(stu: pd.Series, site: pd.Series, km: float, weights: Weights, no_car_km: float) -> float:
-    distance_component = normalize_distance_score(km, st.session_state.get("max_km", 50.0))
-    stu_pref = str(stu.get("stu_pref", "") or "")
-    site_field = str(site.get("site_field", "") or "")
-    preferred_component = 100.0 if stu_pref and (stu_pref in site_field) else 0.0
-    req = str(stu.get("stu_req", "") or "")
-    site_type = str(site.get("site_type", "") or "")
-    special_component = 100.0
-    if req:
-        if "לא בבית חולים" in req and site_type == "בית חולים":
-            special_component = 0.0
-        if "קרוב" in req and (not pd.isna(km)) and km > no_car_km:
-            special_component = 0.0
-    mobility = str(stu.get("stu_mobility", "") or "")
-    if mobility and ("אין" in mobility or "ללא" in mobility) and (not pd.isna(km)) and km > no_car_km:
-        distance_component *= 0.4
-    score = (weights.w_distance * distance_component +
-             weights.w_preferred_field * preferred_component +
-             weights.w_special_request * special_component)
-    return max(0.0, min(100.0, float(score)))
-
-def candidate_table_for_student(stu: pd.Series, sites_df: pd.DataFrame, weights: Weights, no_car_km: float) -> pd.DataFrame:
-    lat1, lon1 = stu.get("stu_lat"), stu.get("stu_lon")
-    tmp = sites_df.copy()
-    tmp["distance_km"] = tmp.apply(lambda r: haversine(lat1, lon1, r.get("site_lat"), r.get("site_lon")), axis=1)
-    tmp["score"] = tmp.apply(lambda r: compute_score(stu, r, r["distance_km"], weights, no_car_km), axis=1)
-    return tmp.sort_values(["score", "distance_km"], ascending=[False, True])
-
-# ================= Resolve Inputs =================
 def resolve_students(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
-    out["stu_id"]  = out[pick_col(out, STU_COLS["id"])]
+    out["stu_id"]    = out[pick_col(out, STU_COLS["id"])]
     out["stu_first"] = out[pick_col(out, STU_COLS["first"])]
     out["stu_last"]  = out[pick_col(out, STU_COLS["last"])]
     out["stu_phone"] = out[pick_col(out, STU_COLS["phone"])]
     out["stu_email"] = out[pick_col(out, STU_COLS["email"])]
+    out["stu_city"]  = out[pick_col(out, STU_COLS["city"])] if pick_col(out, STU_COLS["city"]) else ""
+    out["stu_address"] = out[pick_col(out, STU_COLS["address"])] if pick_col(out, STU_COLS["address"]) else ""
     pref_col = pick_col(out, STU_COLS["preferred_field"])
-    out["stu_pref"]  = out[pref_col] if pref_col else ""
-    out["stu_req"]   = out[pick_col(out, STU_COLS["special_req"])] if pick_col(out, STU_COLS["special_req"]) else ""
-    out["stu_mobility"] = out[pick_col(out, STU_COLS["mobility"])] if pick_col(out, STU_COLS["mobility"]) else ""
-    out["stu_partner"]  = out[pick_col(out, STU_COLS["partner"])] if pick_col(out, STU_COLS["partner"]) else ""
-    out["stu_address_full"] = out.apply(lambda r: build_student_address(r, out), axis=1)
+    out["stu_pref"] = out[pref_col] if pref_col else ""
+    out["stu_req"]  = out[pick_col(out, STU_COLS["special_req"])] if pick_col(out, STU_COLS["special_req"]) else ""
+    out["stu_partner"] = out[pick_col(out, STU_COLS["partner"])] if pick_col(out, STU_COLS["partner"]) else ""
+    # Normalize
+    for c in ["stu_id","stu_first","stu_last","stu_phone","stu_email","stu_city","stu_address","stu_pref","stu_req","stu_partner"]:
+        out[c] = out[c].apply(normalize_text)
     return out
 
 def resolve_sites(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
     out["site_name"]  = out[pick_col(out, SITE_COLS["name"])]
     out["site_field"] = out[pick_col(out, SITE_COLS["field"])]
-    # city for export
-    city_col = pick_col(out, SITE_COLS["city"])
-    out["site_city"] = out[city_col] if city_col else ""
-    # capacity & address
+    out["site_street"]= out[pick_col(out, SITE_COLS["street"])] if pick_col(out, SITE_COLS["street"]) else ""
+    out["site_city"]  = out[pick_col(out, SITE_COLS["city"])] if pick_col(out, SITE_COLS["city"]) else ""
     cap_col = pick_col(out, SITE_COLS["capacity"])
     out["site_capacity"] = pd.to_numeric(out[cap_col], errors="coerce").fillna(1).astype(int) if cap_col else 1
     out["capacity_left"] = out["site_capacity"].astype(int)
-    out["site_address_full"] = out.apply(lambda r: build_site_address(r, out), axis=1)
     out["site_type"] = out.apply(lambda r: detect_site_type(r.get("site_name"), r.get("site_field")), axis=1)
     # supervisor
     sup_first = pick_col(out, SITE_COLS["sup_first"])
@@ -275,54 +163,103 @@ def resolve_sites(df: pd.DataFrame) -> pd.DataFrame:
     out["supervisor"] = ""
     if sup_first or sup_last:
         ff = out[sup_first] if sup_first else ""
-        ll = out[sup_last] if sup_last else ""
+        ll = out[sup_last]  if sup_last  else ""
         out["supervisor"] = (ff.astype(str) + " " + ll.astype(str)).str.strip()
+    # Normalize
+    for c in ["site_name","site_field","site_street","site_city","site_type","supervisor"]:
+        out[c] = out[c].apply(normalize_text)
     return out
 
-def find_partner_map(students_df: pd.DataFrame) -> Dict[str, str]:
-    ids = set(students_df["stu_id"].astype(str))
-    mapping = {}
+def tokens(s: str) -> List[str]:
+    return [t for t in str(s).replace(","," ").replace("/"," ").replace("-"," ").split() if t]
+
+def field_match_score(stu_pref: str, site_field: str) -> float:
+    """Return 0..100 based on exact/partial overlap — calibrated to avoid low 10/30 plateaus."""
+    if not stu_pref: 
+        return 50.0  # בסיס אם אין העדפה – לא נמוך מידי
+    sp = stu_pref.strip()
+    sf = site_field.strip()
+    if not sf:
+        return 40.0
+    if sp and sp in sf:
+        return 90.0
+    # partial overlap by tokens
+    tp = set([w for w in tokens(sp) if len(w) > 1])
+    tf = set([w for w in tokens(sf) if len(w) > 1])
+    inter = tp.intersection(tf)
+    if inter:
+        return 75.0
+    return 45.0
+
+def special_req_score(req: str, site_type: str, same_city: bool) -> float:
+    if not req:
+        return 70.0  # ניטרלי-חיובי
+    s = req
+    # אם ביקש "לא בבית חולים" – ואתר בית חולים → אי-התאמה קיצונית
+    if "לא בבית חולים" in s and site_type == "בית חולים":
+        return 0.0
+    # אם ביקש "קרוב" – קירוב לפי עיר זהה
+    if "קרוב" in s:
+        return 90.0 if same_city else 55.0
+    return 75.0
+
+def compute_score(stu: pd.Series, site: pd.Series, W: Weights) -> float:
+    same_city = (stu.get("stu_city") and site.get("site_city") and stu.get("stu_city") == site.get("site_city"))
+    field_s  = field_match_score(stu.get("stu_pref",""), site.get("site_field",""))
+    city_s   = 100.0 if same_city else 65.0  # אם לא אותה עיר – לא 0, כדי לא להוריד מדי
+    special_s= special_req_score(stu.get("stu_req",""), site.get("site_type",""), same_city)
+    score = W.w_field*field_s + W.w_city*city_s + W.w_special*special_s
+    return float(np.clip(score, 0, 100))
+
+def find_partner_map(students_df: pd.DataFrame) -> Dict[str,str]:
+    ids = set(students_df["stu_id"])
+    m = {}
     for _, r in students_df.iterrows():
-        sid = str(r.get("stu_id", ""))
-        pid = str(r.get("stu_partner", "") or "").strip()
+        sid = r["stu_id"]
+        pid = r.get("stu_partner","")
         if not pid: 
             continue
         if pid in ids and pid != sid:
-            mapping[sid] = pid
+            m[sid] = pid
             continue
+        # match by name
         for _, r2 in students_df.iterrows():
-            fullname = f"{r2.get('stu_first','')} {r2.get('stu_last','')}".strip()
-            if pid and fullname and pid in fullname:
-                pid2 = str(r2.get("stu_id", ""))
-                if pid2 and pid2 != sid:
-                    mapping[sid] = pid2
-                    break
-    return mapping
+            full = f"{r2.get('stu_first','')} {r2.get('stu_last','')}".strip()
+            if pid and full and pid in full and r2["stu_id"] != sid:
+                m[sid] = r2["stu_id"]
+                break
+    return m
 
-# ================= Matching =================
-def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, weights: Weights, no_car_km: float,
-                 top_k: int, separate_couples: bool) -> pd.DataFrame:
+def candidate_table_for_student(stu: pd.Series, sites_df: pd.DataFrame, W: Weights) -> pd.DataFrame:
+    tmp = sites_df.copy()
+    tmp["score"] = tmp.apply(lambda r: compute_score(stu, r, W), axis=1)
+    return tmp.sort_values(["score"], ascending=[False])
+
+def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, W: Weights) -> pd.DataFrame:
+    # internal settings (no UI)
+    separate_couples = True
+    top_k = 10
 
     def dec_cap(idx: int):
         sites_df.at[idx, "capacity_left"] = int(sites_df.at[idx, "capacity_left"]) - 1
 
     results = []
-    processed: set[str] = set()
+    processed = set()
     partner_map = find_partner_map(students_df)
 
     # Couples first
     for _, s in students_df.iterrows():
-        sid = str(s["stu_id"])
+        sid = s["stu_id"]
         if sid in processed: 
             continue
         pid = partner_map.get(sid)
         if pid and partner_map.get(pid) == sid:
-            partner_row = students_df[students_df["stu_id"].astype(str) == pid]
+            partner_row = students_df[students_df["stu_id"] == pid]
             if partner_row.empty:
                 continue
             s2 = partner_row.iloc[0]
-            cand1 = candidate_table_for_student(s, sites_df[sites_df["capacity_left"]>0], weights, no_car_km).head(top_k)
-            cand2 = candidate_table_for_student(s2, sites_df[sites_df["capacity_left"]>0], weights, no_car_km).head(top_k)
+            cand1 = candidate_table_for_student(s, sites_df[sites_df["capacity_left"]>0], W).head(top_k)
+            cand2 = candidate_table_for_student(s2, sites_df[sites_df["capacity_left"]>0], W).head(top_k)
             best = (-1.0, None, None)
             for i1, r1 in cand1.iterrows():
                 for i2, r2 in cand2.iterrows():
@@ -343,10 +280,10 @@ def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, weights: Wei
 
     # Singles
     for _, s in students_df.iterrows():
-        sid = str(s["stu_id"])
+        sid = s["stu_id"]
         if sid in processed: 
             continue
-        cand = candidate_table_for_student(s, sites_df[sites_df["capacity_left"]>0], weights, no_car_km).head(top_k)
+        cand = candidate_table_for_student(s, sites_df[sites_df["capacity_left"]>0], W).head(top_k)
         if not cand.empty:
             chosen_idx = cand.index[0]
             rsite = sites_df.loc[chosen_idx]
@@ -354,125 +291,83 @@ def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, weights: Wei
             results.append((s, rsite))
             processed.add(sid)
 
-    # Build output
+    # Build export (NO distance fields)
     rows = []
     for s, r in results:
-        km = haversine(s.get("stu_lat"), s.get("stu_lon"), r.get("site_lat"), r.get("site_lon"))
-        score = compute_score(s, r, km, weights, no_car_km)
+        score = compute_score(s, r, W)
         rows.append({
             "ת\"ז הסטודנט": s.get("stu_id"),
             "שם פרטי": s.get("stu_first"),
             "שם משפחה": s.get("stu_last"),
-            "כתובת": s.get("stu_address_full"),
+            "כתובת": s.get("stu_address"),
+            "עיר": s.get("stu_city"),
             "מספר טלפון": s.get("stu_phone"),
             "אימייל": s.get("stu_email"),
             "אחוז התאמה": round(score, 1),
-            # Distances
-            "מרחק ק\"מ (סטודנט←מוסד)": None if pd.isna(km) else round(float(km), 2),
-            "מרחק ק\"מ (סטודנט←מדריך)": None if pd.isna(km) else round(float(km), 2),  # בהנחה שכתובת המדריך = כתובת המוסד
-            # Site meta
             "שם מקום ההתמחות": r.get("site_name"),
             "עיר המוסד": r.get("site_city"),
             "סוג מקום השיבוץ": r.get("site_type"),
             "תחום ההתמחות במוסד": r.get("site_field"),
         })
     out = pd.DataFrame(rows)
-    desired = [
-        "ת\"ז הסטודנט","שם פרטי","שם משפחה","כתובת","מספר טלפון","אימייל",
-        "אחוז התאמה","מרחק ק\"מ (סטודנט←מדריך)","מרחק ק\"מ (סטודנט←מוסד)",
-        "שם מקום ההתמחות","עיר המוסד","סוג מקום השיבוץ","תחום ההתמחות במוסד"
-    ]
-    out = out[[c for c in desired if c in out.columns]]
-    return out
+    desired = ["ת\"ז הסטודנט","שם פרטי","שם משפחה","כתובת","עיר","מספר טלפון","אימייל",
+               "אחוז התאמה","שם מקום ההתמחות","עיר המוסד","סוג מקום השיבוץ","תחום ההתמחות במוסד"]
+    return out[[c for c in desired if c in out.columns]]
 
-# ================= I/O Helpers =================
-def read_any(uploaded) -> pd.DataFrame:
-    if uploaded is None:
-        return None
-    name = uploaded.name.lower()
-    if name.endswith(".csv"):
-        return pd.read_csv(uploaded, encoding="utf-8-sig")
-    if name.endswith(".xlsx") or name.endswith(".xls"):
-        return pd.read_excel(uploaded)
-    try:
-        return pd.read_excel(uploaded)
-    except Exception:
-        return pd.read_csv(uploaded, encoding="utf-8-sig")
+# ---------------- Centered Upload UI ----------------
+W = Weights()
+df_students_raw = None
+df_sites_raw = None
+result_df = None
 
-def preprocess_frames(stu_raw: pd.DataFrame, site_raw: pd.DataFrame, allow_geo: bool):
-    for df in (stu_raw, site_raw):
-        drop_cols = [c for c in df.columns if str(c).startswith("Unnamed")]
-        df.drop(columns=drop_cols, inplace=True, errors="ignore")
-    students = resolve_students(stu_raw)
-    sites = resolve_sites(site_raw)
-    students["stu_address_full"] = students["stu_address_full"].fillna("")
-    sites["site_address_full"] = sites["site_address_full"].fillna("")
-    students = ensure_latlon(students, "stu_address_full", "stu", allow_geo)
-    sites = ensure_latlon(sites, "site_address_full", "site", allow_geo)
-    return students, sites
+col_left, col_mid, col_right = st.columns([1, 1.6, 1], gap="large")
+with col_mid:
+    with st.form("upload_form", clear_on_submit=False):
+        st.markdown('<div class="center-card">', unsafe_allow_html=True)
+        st.subheader("📥 העלאת קבצים")
+        st.write("נא להעלות **קובץ סטודנטים** ו**קובץ אתרי התמחות** (CSV/XLSX).")
+        f_students = st.file_uploader("קובץ סטודנטים", type=["csv","xlsx","xls"], key="stu")
+        f_sites    = st.file_uploader("קובץ אתרי התמחות/מדריכים", type=["csv","xlsx","xls"], key="site")
+        submitted = st.form_submit_button("🚀 בצע שיבוץ", use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
 
-# ================= Sidebar & Main =================
-with st.sidebar:
-    st.header("העלאת קבצים והגדרות")
-    students_file = st.file_uploader("סטודנטים – CSV/XLSX", type=["csv","xlsx","xls"])
-    sites_file = st.file_uploader("אתרי התמחות – CSV/XLSX", type=["csv","xlsx","xls"])
-    st.divider()
-    allow_geo = st.checkbox("בצע גיאוקוד אונליין (כתובת → קואורדינטות)", value=False)
-    max_km = st.slider("טווח מרחק לנרמול (ק\"מ)", 10, 200, 50, step=5)
-    st.session_state["max_km"] = float(max_km)
-    no_car_km = st.slider("מרחק מקסימלי ללא רכב (ק\"מ)", 2, 50, 12, step=1)
-    st.subheader("משקולות ניקוד")
-    w_distance = st.slider("משקל מרחק", 0.0, 1.0, 0.7, 0.05)
-    w_pref = st.slider("משקל תחום מועדף", 0.0, 1.0, 0.2, 0.05)
-    w_req = st.slider("משקל בקשות מיוחדות/מגבלות", 0.0, 1.0, 0.1, 0.05)
-    weights = Weights(w_distance, w_pref, w_req)
-    st.divider()
-    separate_couples = st.checkbox("הפרד בני/בנות זוג (לא אותו מוסד/מדריך)", value=True)
-    top_k = st.slider("מספר אתרים לבחינה לכל סטודנט (Top-K)", 3, 25, 10, step=1)
-    run_btn = st.button("🚀 הפעל שיבוץ")
-
-tab1, tab2 = st.tabs(["📤 העלאת נתונים", "📊 תוצאות השיבוץ"])
-
-with tab1:
-    st.subheader("1) העלו את טבלאות המקור (CSV/XLSX)")
-    st.info("הקוד מזהה עמודות נפוצות באופן אוטומטי. לשיפור דיוק המרחקים אפשר להוסיף עמודות קואורדינטות (`stu_lat, stu_lon`, `site_lat, site_lon`).")
-    if 'df_students_raw' not in st.session_state:
-        st.session_state['df_students_raw'] = None
-    if 'df_sites_raw' not in st.session_state:
-        st.session_state['df_sites_raw'] = None
-
-    if students_file:
-        st.success(f"קובץ סטודנטים נטען: {students_file.name}")
-        st.session_state['df_students_raw'] = read_any(students_file)
-        st.dataframe(st.session_state['df_students_raw'].head(10), use_container_width=True)
+if submitted:
+    if f_students is None or f_sites is None:
+        st.error("נא להעלות את שני הקבצים.")
     else:
-        if st.session_state['df_students_raw'] is None:
-            st.warning("לא הועלה קובץ סטודנטים.")
-
-    if sites_file:
-        st.success(f"קובץ אתרי התמחות נטען: {sites_file.name}")
-        st.session_state['df_sites_raw'] = read_any(sites_file)
-        st.dataframe(st.session_state['df_sites_raw'].head(10), use_container_width=True)
-    else:
-        if st.session_state['df_sites_raw'] is None:
-            st.warning("לא הועלה קובץ אתרים.")
-
-with tab2:
-    st.subheader("2) הרצת שיבוץ והורדת קובץ תוצאה")
-    if run_btn:
-        df_students_raw = st.session_state['df_students_raw']
-        df_sites_raw = st.session_state['df_sites_raw']
-        if df_students_raw is None or df_sites_raw is None:
-            st.error("חסר אחד הקבצים. נא להעלות גם סטודנטים וגם אתרים.")
-        else:
-            with st.spinner("מחשב מרחקים, ניקוד ושיבוץ..."):
-                stu_proc, site_proc = preprocess_frames(df_students_raw.copy(), df_sites_raw.copy(), allow_geo)
-                result = greedy_match(stu_proc, site_proc, weights, float(no_car_km), int(top_k), bool(separate_couples))
+        try:
+            df_students_raw = read_any(f_students)
+            df_sites_raw = read_any(f_sites)
+            # cleanup unnamed
+            for df in (df_students_raw, df_sites_raw):
+                drop_cols = [c for c in df.columns if str(c).startswith("Unnamed")]
+                df.drop(columns=drop_cols, inplace=True, errors="ignore")
+            students = resolve_students(df_students_raw)
+            sites = resolve_sites(df_sites_raw)
+            result_df = greedy_match(students, sites, W)
             st.success("השיבוץ הושלם ✓")
-            st.dataframe(result, use_container_width=True)
-            csv_data = result.to_csv(index=False, encoding="utf-8-sig")
-            st.download_button("⬇️ הורדת קובץ השיבוץ (CSV)",
-                               data=csv_data,
-                               file_name="student_site_matching.csv",
-                               mime="text/csv")
-            st.caption("הערה: אם המרחקים ריקים, הפעילו גיאוקוד אונליין או הוסיפו עמודות קואורדינטות לקבצים.")
+        except Exception as e:
+            st.exception(e)
+
+# ---------------- Results ----------------
+if result_df is not None and not result_df.empty:
+    st.subheader("📊 תוצאות השיבוץ")
+    st.dataframe(result_df, use_container_width=True)
+    csv = result_df.to_csv(index=False, encoding="utf-8-sig")
+    st.download_button("⬇️ הורדת קובץ השיבוץ (CSV)", data=csv, file_name="student_site_matching.csv", mime="text/csv")
+
+# ---------------- Help / Guide ----------------
+st.markdown("""
+<div class="center-wrap">
+  <div class="center-card">
+    <h3>❓ מדריך שימוש מהיר</h3>
+    <ol>
+      <li>הכינו <b>קובץ סטודנטים</b> עם העמודות: שם פרטי, שם משפחה, תעודת זהות, כתובת/עיר, טלפון, אימייל. אופציונלי: תחום מועדף, בקשה מיוחדת, בן/בת זוג להכשרה.</li>
+      <li>הכינו <b>קובץ אתרים/מדריכים</b> עם העמודות: מוסד/שירות, תחום התמחות, רחוב, עיר, מספר סטודנטים שניתן לקלוט השנה. אופציונלי: שם פרטי+שם משפחה של המדריך, טלפון, אימייל.</li>
+      <li>לחצו על <b>בצע שיבוץ</b>. המערכת תחשב <b>אחוז התאמה</b> לפי התאמה לתחום, התאמת עיר ובקשות מיוחדות, ותשמור על קיבולת ואת הפרדת בני/בנות זוג (לא אותו מוסד/מדריך).</li>
+      <li>הורידו את קובץ התוצאות בלחיצה על כפתור ההורדה.</li>
+    </ol>
+    <p class="small-muted">הערות: אם תוסיפו עמודת העדפה (תחום מועדף) הדיוק יעלה. בקשה כמו "לא בבית חולים" תפסול מוסדות מסוג בית חולים.</p>
+  </div>
+</div>
+""", unsafe_allow_html=True)
