@@ -1,5 +1,5 @@
 
-# matcher_streamlit_xlsx_csv.py
+# matcher_streamlit_xlsx_csv_styled.py
 # -*- coding: utf-8 -*-
 import streamlit as st
 import pandas as pd
@@ -8,9 +8,9 @@ from math import radians, sin, cos, asin, sqrt
 from dataclasses import dataclass
 from typing import Tuple, Optional, Dict, Any, List
 
-# ================= UI & Styling (per user's style) =================
 st.set_page_config(page_title="מערכת שיבוץ סטודנטים – התאמה חכמה", layout="wide")
 
+# --- Exact style snippet from user ---
 st.markdown("""
 <style>
 :root{
@@ -60,15 +60,13 @@ input, textarea, select{ direction:rtl; text-align:right; }
 st.title("🏷️ מערכת שיבוץ סטודנטים – התאמה לפי מרחק, תחום והעדפות")
 st.caption("מחשב מרחקים, ניקוד התאמה ושיבוץ מתוך קבצי CSV/XLSX של סטודנטים ואתרי התמחות.")
 
-# ================= Utilities & Config =================
-
 @dataclass
 class Weights:
     w_distance: float = 0.7
     w_preferred_field: float = 0.2
     w_special_request: float = 0.1
 
-# Synonyms for columns (Hebrew variations across exports)
+# Synonyms for columns
 STU_COLS = {
     "id": ["מספר תעודת זהות", "תעודת זהות", "ת\"ז", "תז", "תעודת זהות הסטודנט"],
     "first": ["שם פרטי"],
@@ -77,7 +75,7 @@ STU_COLS = {
     "city": ["עיר מגורים", "עיר"],
     "phone": ["טלפון", "מספר טלפון"],
     "email": ["דוא\"ל", "דוא״ל", "אימייל", "כתובת אימייל", "כתובת מייל"],
-    "preferred_field": ["תחום מועדף"],
+    "preferred_field": ["תחום מועדף","תחומים מועדפים"],
     "special_req": ["בקשה מיוחדת"],
     "mobility": ["ניידות"],
     "partner": ["בן/בת זוג להכשרה", "בן\\בת זוג להכשרה", "בן/בת זוג", "בן\\בת זוג"]
@@ -146,7 +144,6 @@ def detect_site_type(name: str, field: str) -> str:
         return "חינוך"
     return "אחר"
 
-# Haversine distance (km)
 def haversine(lat1, lon1, lat2, lon2) -> float:
     if None in (lat1, lon1, lat2, lon2) or any(pd.isna([lat1, lon1, lat2, lon2])):
         return np.nan
@@ -158,7 +155,6 @@ def haversine(lat1, lon1, lat2, lon2) -> float:
     r = 6371
     return c * r
 
-# Optional geocoding (online). Lazy init.
 _GEOCODER = None
 _CACHE: Dict[str, Tuple[Optional[float], Optional[float]]] = {}
 
@@ -214,11 +210,9 @@ def normalize_distance_score(km: float, max_km: float) -> float:
 
 def compute_score(stu: pd.Series, site: pd.Series, km: float, weights: Weights, no_car_km: float) -> float:
     distance_component = normalize_distance_score(km, st.session_state.get("max_km", 50.0))
-    # field preference
     stu_pref = str(stu.get("stu_pref", "") or "")
     site_field = str(site.get("site_field", "") or "")
     preferred_component = 100.0 if stu_pref and (stu_pref in site_field) else 0.0
-    # special requests
     req = str(stu.get("stu_req", "") or "")
     site_type = str(site.get("site_type", "") or "")
     special_component = 100.0
@@ -227,11 +221,9 @@ def compute_score(stu: pd.Series, site: pd.Series, km: float, weights: Weights, 
             special_component = 0.0
         if "קרוב" in req and (not pd.isna(km)) and km > no_car_km:
             special_component = 0.0
-    # mobility
     mobility = str(stu.get("stu_mobility", "") or "")
     if mobility and ("אין" in mobility or "ללא" in mobility) and (not pd.isna(km)) and km > no_car_km:
         distance_component *= 0.4
-
     score = (weights.w_distance * distance_component +
              weights.w_preferred_field * preferred_component +
              weights.w_special_request * special_component)
@@ -246,17 +238,16 @@ def candidate_table_for_student(stu: pd.Series, sites_df: pd.DataFrame, weights:
 
 def resolve_students(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
-    # Core identity
     out["stu_id"]  = out[pick_col(out, STU_COLS["id"])]
     out["stu_first"] = out[pick_col(out, STU_COLS["first"])]
     out["stu_last"]  = out[pick_col(out, STU_COLS["last"])]
     out["stu_phone"] = out[pick_col(out, STU_COLS["phone"])]
     out["stu_email"] = out[pick_col(out, STU_COLS["email"])]
-    out["stu_pref"]  = out[pick_col(out, STU_COLS["preferred_field"])] if pick_col(out, STU_COLS["preferred_field"]) else ""
+    pref_col = pick_col(out, STU_COLS["preferred_field"])
+    out["stu_pref"]  = out[pref_col] if pref_col else ""
     out["stu_req"]   = out[pick_col(out, STU_COLS["special_req"])] if pick_col(out, STU_COLS["special_req"]) else ""
     out["stu_mobility"] = out[pick_col(out, STU_COLS["mobility"])] if pick_col(out, STU_COLS["mobility"]) else ""
     out["stu_partner"]  = out[pick_col(out, STU_COLS["partner"])] if pick_col(out, STU_COLS["partner"]) else ""
-    # Address
     out["stu_address_full"] = out.apply(lambda r: build_student_address(r, out), axis=1)
     return out
 
@@ -264,19 +255,11 @@ def resolve_sites(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
     out["site_name"]  = out[pick_col(out, SITE_COLS["name"])]
     out["site_field"] = out[pick_col(out, SITE_COLS["field"])]
-    out["site_phone"] = out[pick_col(out, SITE_COLS["phone"]) ] if pick_col(out, SITE_COLS["phone"]) else ""
-    out["site_email"] = out[pick_col(out, SITE_COLS["email"]) ] if pick_col(out, SITE_COLS["email"]) else ""
-    # capacity
     cap_col = pick_col(out, SITE_COLS["capacity"])
-    if cap_col is None:
-        out["site_capacity"] = 1
-    else:
-        out["site_capacity"] = pd.to_numeric(out[cap_col], errors="coerce").fillna(1).astype(int)
+    out["site_capacity"] = pd.to_numeric(out[cap_col], errors="coerce").fillna(1).astype(int) if cap_col else 1
     out["capacity_left"] = out["site_capacity"].astype(int)
-    # Address + type
     out["site_address_full"] = out.apply(lambda r: build_site_address(r, out), axis=1)
     out["site_type"] = out.apply(lambda r: detect_site_type(r.get("site_name"), r.get("site_field")), axis=1)
-    # Supervisor name if exists (to separate couples under same mentor if desired)
     sup_first = pick_col(out, SITE_COLS["sup_first"])
     sup_last  = pick_col(out, SITE_COLS["sup_last"])
     out["supervisor"] = ""
@@ -292,13 +275,11 @@ def find_partner_map(students_df: pd.DataFrame) -> Dict[str, str]:
     for _, r in students_df.iterrows():
         sid = str(r.get("stu_id", ""))
         pid = str(r.get("stu_partner", "") or "").strip()
-        if not pid:
+        if not pid: 
             continue
-        # direct id
         if pid in ids and pid != sid:
             mapping[sid] = pid
             continue
-        # try by full name
         for _, r2 in students_df.iterrows():
             fullname = f"{r2.get('stu_first','')} {r2.get('stu_last','')}".strip()
             if pid and fullname and pid in fullname:
@@ -311,7 +292,6 @@ def find_partner_map(students_df: pd.DataFrame) -> Dict[str, str]:
 def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, weights: Weights, no_car_km: float,
                  top_k: int, separate_couples: bool) -> pd.DataFrame:
 
-    # Helper to decrement capacity
     def dec_cap(idx: int):
         sites_df.at[idx, "capacity_left"] = int(sites_df.at[idx, "capacity_left"]) - 1
 
@@ -319,7 +299,7 @@ def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, weights: Wei
     processed: set[str] = set()
     partner_map = find_partner_map(students_df)
 
-    # Couples first (mutual reference)
+    # Couples
     for _, s in students_df.iterrows():
         sid = str(s["stu_id"])
         if sid in processed: 
@@ -330,22 +310,19 @@ def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, weights: Wei
             if partner_row.empty:
                 continue
             s2 = partner_row.iloc[0]
-            # top candidates for both
             cand1 = candidate_table_for_student(s, sites_df[sites_df["capacity_left"]>0], weights, no_car_km).head(top_k)
             cand2 = candidate_table_for_student(s2, sites_df[sites_df["capacity_left"]>0], weights, no_car_km).head(top_k)
             best = (-1.0, None, None)
             for i1, r1 in cand1.iterrows():
                 for i2, r2 in cand2.iterrows():
-                    if i1 == i2:  # not same site
+                    if i1 == i2:
                         continue
-                    if separate_couples:
-                        if r1.get("supervisor") and r1.get("supervisor") == r2.get("supervisor"):
-                            continue
+                    if separate_couples and r1.get("supervisor") and r1.get("supervisor") == r2.get("supervisor"):
+                        continue
                     sc = float(r1["score"]) + float(r2["score"])
                     if sc > best[0]:
                         best = (sc, i1, i2)
             if best[1] is not None and best[2] is not None:
-                # assign
                 rsite1 = sites_df.loc[best[1]]
                 rsite2 = sites_df.loc[best[2]]
                 dec_cap(best[1]); dec_cap(best[2])
@@ -366,7 +343,6 @@ def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, weights: Wei
             results.append((s, rsite))
             processed.add(sid)
 
-    # Build output
     rows = []
     for s, r in results:
         km = haversine(s.get("stu_lat"), s.get("stu_lon"), r.get("site_lat"), r.get("site_lon"))
@@ -381,7 +357,6 @@ def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, weights: Wei
             "אחוז התאמה": round(score, 1),
             "מרחק ק\"מ (סטודנט←מוסד)": None if pd.isna(km) else round(float(km), 2),
             "סוג מקום השיבוץ": r.get("site_type"),
-            # extras:
             "שם מוסד ההתמחות": r.get("site_name"),
             "תחום ההתמחות במוסד": r.get("site_field"),
         })
@@ -399,29 +374,23 @@ def read_any(uploaded) -> pd.DataFrame:
         return pd.read_csv(uploaded, encoding="utf-8-sig")
     if name.endswith(".xlsx") or name.endswith(".xls"):
         return pd.read_excel(uploaded)
-    # fallback try both
     try:
         return pd.read_excel(uploaded)
     except Exception:
         return pd.read_csv(uploaded, encoding="utf-8-sig")
 
 def preprocess_frames(stu_raw: pd.DataFrame, site_raw: pd.DataFrame, allow_geo: bool):
-    # Drop Unnamed
     for df in (stu_raw, site_raw):
         drop_cols = [c for c in df.columns if str(c).startswith("Unnamed")]
         df.drop(columns=drop_cols, inplace=True, errors="ignore")
-    # Resolve
     students = resolve_students(stu_raw)
     sites = resolve_sites(site_raw)
-    # Addresses
     students["stu_address_full"] = students["stu_address_full"].fillna("")
     sites["site_address_full"] = sites["site_address_full"].fillna("")
-    # Lat/Lon
     students = ensure_latlon(students, "stu_address_full", "stu", allow_geo)
     sites = ensure_latlon(sites, "site_address_full", "site", allow_geo)
     return students, sites
 
-# ================= Sidebar =================
 with st.sidebar:
     st.header("העלאת קבצים והגדרות")
     students_file = st.file_uploader("סטודנטים – CSV/XLSX", type=["csv","xlsx","xls"])
@@ -441,13 +410,11 @@ with st.sidebar:
     top_k = st.slider("מספר אתרים לבחינה לכל סטודנט (Top-K)", 3, 25, 10, step=1)
     run_btn = st.button("🚀 הפעל שיבוץ")
 
-# ================= Tabs =================
 tab1, tab2 = st.tabs(["📤 העלאת נתונים", "📊 תוצאות השיבוץ"])
 
 with tab1:
-    st.subheader("1) העלו את טבלאות המקור (או דוגמאות)")
-    st.write("קבצים נתמכים: **CSV, XLSX**. הקוד יזהה עמודות נפוצות אוטומטית (שם פרטי, שם משפחה, ת\"ז, כתובת/עיר, טלפון, דוא\"ל, תחום מועדף, בקשה מיוחדת, ניידות; ובאתרים: מוסד/תחום/רחוב/עיר/קיבולת).")
-    st.info("טיפ: להאצת חישוב מרחקים ניתן להוסיף קואורדינטות מוכנות: לסטודנטים `stu_lat, stu_lon` ולאתרים `site_lat, site_lon`.")
+    st.subheader("1) העלו את טבלאות המקור (CSV/XLSX)")
+    st.info("הקוד מזהה עמודות נפוצות באופן אוטומטי. לשיפור דיוק המרחקים אפשר להוסיף עמודות קואורדינטות (`stu_lat, stu_lon`, `site_lat, site_lon`).")
     if students_file:
         st.success(f"קובץ סטודנטים נטען: {students_file.name}")
         df_students_raw = read_any(students_file)
