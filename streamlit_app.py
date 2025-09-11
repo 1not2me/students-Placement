@@ -483,21 +483,14 @@ st.markdown("## 📊 תוצאות השיבוץ")
 if 'result_df' in locals() and result_df is not None and not result_df.empty:
     st.dataframe(result_df, use_container_width=True)
 
-    # CSV
-    csv_bytes = result_df.to_csv(index=False, encoding="utf-8-sig")
-    st.download_button(
-        "⬇️ הורדת קובץ התוצאות (CSV)",
-        data=csv_bytes,
-        file_name="student_site_matching.csv",
-        mime="text/csv",
-        key="dl_csv"
-    )
+    # >>> הוסר כפתור ה-CSV <<<
 
     # XLSX – כפתור בסגנון התמונה: "הורדת Excel (XLSX)"
+    from io import BytesIO
     xlsx_io = BytesIO()
     with pd.ExcelWriter(xlsx_io, engine="xlsxwriter") as writer:
         result_df.to_excel(writer, index=False, sheet_name="שיבוץ")
-        sht  = writer.sheets["שיבוץ"]
+        sht = writer.sheets["שיבוץ"]
         for i, col in enumerate(result_df.columns):
             width = max(12, min(40, int(result_df[col].astype(str).map(len).max() if not result_df.empty else 12) + 2))
             sht.set_column(i, i, width)
@@ -509,16 +502,15 @@ if 'result_df' in locals() and result_df is not None and not result_df.empty:
         file_name="student_site_matching.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         key="dl_xlsx",
-        help="excel-like"  # נשתמש כדי לצבוע את הכפתור באייקון דרך CSS
+        help="excel-like"
     )
 
-    # הוספת class ל"כפתור האקסל" כדי לקבל את האייקון מה-CSS
+    # שמירת העיצוב של האייקון לכפתור האקסל
     st.markdown("""
     <script>
     const btns = parent.document.querySelectorAll('div.stDownloadButton > button');
     btns.forEach(b=>{ if(b.title && b.title.includes('excel-like')) b.classList.add('excel-like'); });
     </script>
     """, unsafe_allow_html=True)
-
 else:
     st.caption("טרם הופעל שיבוץ או שאין תוצאות להצגה.")
