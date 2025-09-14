@@ -540,17 +540,5 @@ if isinstance(st.session_state["result_df"], pd.DataFrame) and not st.session_st
         st.dataframe(
             st.session_state["unused_sites"][["site_name","site_city","site_field","site_capacity"]],
             use_container_width=True
+        
         )
-
-
-
-    # --- טבלאות נוספות ---
-    if isinstance(st.session_state["unmatched_students"], pd.DataFrame) and not st.session_state["unmatched_students"].empty:
-        st.markdown("### 👩‍🎓 סטודנטים שלא שובצו")
-        st.dataframe(st.session_state["unmatched_students"], use_container_width=True)
-
-    if isinstance(st.session_state["unused_sites"], pd.DataFrame) and not st.session_state["unused_sites"].empty:
-        st.markdown("### 🏫 מוסדות שלא שובץ אליהם אף סטודנט")
-        st.dataframe(st.session_state["unused_sites"][["site_name","site_city","site_field","site_capacity"]], use_container_width=True)
-else:
-    st.caption("טרם הופעל שיבוץ או שאין תוצאות להצגה.")
