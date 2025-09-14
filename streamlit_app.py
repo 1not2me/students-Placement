@@ -487,25 +487,36 @@ if run_btn:
             st.success("השיבוץ הושלם ✓")
         except Exception as e:
             st.exception(e)
-
 # ====== 5) תוצאות ======
 st.markdown("## 📊 תוצאות השיבוץ")
 if result_df is not None and not result_df.empty:
     st.dataframe(result_df, use_container_width=True)
 
-    # כפתור Excel בלבד
-    xlsx_io = BytesIO()
-    with pd.ExcelWriter(xlsx_io, engine="xlsxwriter") as writer:
-        result_df.to_excel(writer, index=False, sheet_name="שיבוץ")
-    xlsx_io.seek(0)
-    st.download_button(
-        label="הורדת Excel (XLSX)",
-        data=xlsx_io.getvalue(),
-        file_name="student_site_matching.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        key="dl_xlsx",
-        help="excel-like"
-    )
+    # ניסיון 1: יצוא ל-Excel ללא ציון engine (פנדס יבחר openpyxl אם זמין)
+    try:
+        xlsx_io = BytesIO()
+        with pd.ExcelWriter(xlsx_io) as writer:  # <-- שימי לב: בלי engine="xlsxwriter"
+            result_df.to_excel(writer, index=False, sheet_name="שיבוץ")
+        xlsx_io.seek(0)
+        st.download_button(
+            label="⬇️ הורדת Excel (XLSX)",
+            data=xlsx_io.getvalue(),
+            file_name="student_site_matching.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key="dl_xlsx_ok",
+            help="קובץ אקסל לגליון 'שיבוץ'"
+        )
+    except Exception as e:
+        # FallBack: הורדת CSV אם כתיבת Excel נכשלה
+        st.warning("לא הצלחתי ליצור קובץ Excel בסביבה הזו. מציעה להוריד כ-CSV במקום.")
+        st.download_button(
+            label="⬇️ הורדת תוצאות (CSV)",
+            data=result_df.to_csv(index=False, encoding="utf-8-sig"),
+            file_name="student_site_matching.csv",
+            mime="text/csv",
+            key="dl_csv_fallback"
+        )
+        st.caption(f"פרטי שגיאה טכנית (למפתח/ת): {e}")
 
     # --- טבלה: סטודנטים שלא שובצו ---
     if unmatched_students is not None and not unmatched_students.empty:
@@ -516,7 +527,5 @@ if result_df is not None and not result_df.empty:
     if unused_sites is not None and not unused_sites.empty:
         st.markdown("### 🏫 מוסדות שלא שובץ אליהם אף סטודנט")
         st.dataframe(unused_sites[["site_name","site_city","site_field","site_capacity"]], use_container_width=True)
-
 else:
     st.caption("טרם הופעל שיבוץ או שאין תוצאות להצגה.")
-
