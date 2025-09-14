@@ -7,6 +7,9 @@ from io import BytesIO
 from dataclasses import dataclass
 from typing import Optional, Dict, Any, List, Tuple
 
+# =========================
+# קונפיגורציה כללית
+# =========================
 st.set_page_config(page_title="מערכת שיבוץ סטודנטים – התאמה חכמה", layout="wide")
 
 # ====== עיצוב מודרני + RTL + הסתרת "Press Enter to apply" ======
@@ -173,22 +176,32 @@ SITE_COLS = {
 
 def pick_col(df: pd.DataFrame, options: List[str]) -> Optional[str]:
     for opt in options:
-        if opt in df.columns: return opt
+        if opt in df.columns:
+            return opt
     return None
 
 def read_any(uploaded) -> pd.DataFrame:
-    name = uploaded.name.lower()
-    if name.endswith(".csv"):
-        return pd.read_csv(uploaded, encoding="utf-8-sig")
-    if name.endswith(".xlsx") or name.endswith(".xls"):
-        return pd.read_excel(uploaded)
+    """
+    קורא CSV/XLSX. מציג שגיאה ברורה אם לא הצליח לקרוא.
+    """
     try:
-        return pd.read_excel(uploaded)
-    except Exception:
-        return pd.read_csv(uploaded, encoding="utf-8-sig")
+        name = uploaded.name.lower()
+        if name.endswith(".csv"):
+            return pd.read_csv(uploaded, encoding="utf-8-sig")
+        if name.endswith(".xlsx") or name.endswith(".xls"):
+            # openpyxl כותב/קורא xlsx; אם חסר – pandas ינסה גם מנועים אחרים
+            return pd.read_excel(uploaded)
+        # ניסיון חכם: קודם אקסל ואז CSV
+        try:
+            return pd.read_excel(uploaded)
+        except Exception:
+            return pd.read_csv(uploaded, encoding="utf-8-sig")
+    except Exception as e:
+        raise ValueError(f"שגיאה בקריאת הקובץ: {e}")
 
 def normalize_text(x: Any) -> str:
-    if x is None: return ""
+    if x is None:
+        return ""
     return str(x).strip()
 
 def detect_site_type(name: str, field: str) -> str:
@@ -201,29 +214,50 @@ def detect_site_type(name: str, field: str) -> str:
              ("מרכז קהילתי","קהילה"),("רווחה","רווחה"),
              ("חוסן","בריאות הנפש"),("בריאות הנפש","בריאות הנפש")]
     for k,v in pairs:
-        if k in text: return v
-    if "חינוך" in (field or ""): return "חינוך"
+        if k in text:
+            return v
+    if "חינוך" in (field or ""):
+        return "חינוך"
     return "אחר"
 
+def _ensure_df(df: pd.DataFrame, kind: str):
+    if df is None or not isinstance(df, pd.DataFrame) or df.empty:
+        raise ValueError(f"קובץ ה{kind} ריק או לא נטען כראוי. אמת/י פורמט ושמות עמודות.")
+
 def resolve_students(df: pd.DataFrame) -> pd.DataFrame:
+    _ensure_df(df, "סטודנטים")
     out = df.copy()
+
+    # בדיקת עמודות בסיס
+    if not any(pick_col(out, STU_COLS["id"]) for _ in [0]) \
+       or not any(pick_col(out, STU_COLS["first"]) for _ in [0]) \
+       or not any(pick_col(out, STU_COLS["last"]) for _ in [0]):
+        raise ValueError("בקובץ הסטודנטים חסרות עמודות בסיסיות (ת\"ז/שם פרטי/שם משפחה).")
+
     out["stu_id"]    = out[pick_col(out, STU_COLS["id"])]
     out["stu_first"] = out[pick_col(out, STU_COLS["first"])]
     out["stu_last"]  = out[pick_col(out, STU_COLS["last"])]
-    out["stu_phone"] = out[pick_col(out, STU_COLS["phone"])]
-    out["stu_email"] = out[pick_col(out, STU_COLS["email"])]
+    out["stu_phone"] = out[pick_col(out, STU_COLS["phone"])] if pick_col(out, STU_COLS["phone"]) else ""
+    out["stu_email"] = out[pick_col(out, STU_COLS["email"])] if pick_col(out, STU_COLS["email"]) else ""
     out["stu_city"]  = out[pick_col(out, STU_COLS["city"])] if pick_col(out, STU_COLS["city"]) else ""
     out["stu_address"] = out[pick_col(out, STU_COLS["address"])] if pick_col(out, STU_COLS["address"]) else ""
     pref_col = pick_col(out, STU_COLS["preferred_field"])
     out["stu_pref"] = out[pref_col] if pref_col else ""
     out["stu_req"]  = out[pick_col(out, STU_COLS["special_req"])] if pick_col(out, STU_COLS["special_req"]) else ""
     out["stu_partner"] = out[pick_col(out, STU_COLS["partner"])] if pick_col(out, STU_COLS["partner"]) else ""
+
     for c in ["stu_id","stu_first","stu_last","stu_phone","stu_email","stu_city","stu_address","stu_pref","stu_req","stu_partner"]:
         out[c] = out[c].apply(normalize_text)
     return out
 
 def resolve_sites(df: pd.DataFrame) -> pd.DataFrame:
+    _ensure_df(df, "אתרים/מדריכים")
     out = df.copy()
+
+    if not any(pick_col(out, SITE_COLS["name"]) for _ in [0]) \
+       or not any(pick_col(out, SITE_COLS["field"]) for _ in [0]):
+        raise ValueError("בקובץ האתרים חסרות עמודות בסיסיות (שם מוסד/תחום התמחות).")
+
     out["site_name"]  = out[pick_col(out, SITE_COLS["name"])]
     out["site_field"] = out[pick_col(out, SITE_COLS["field"])]
     out["site_street"]= out[pick_col(out, SITE_COLS["street"])] if pick_col(out, SITE_COLS["street"]) else ""
@@ -232,6 +266,7 @@ def resolve_sites(df: pd.DataFrame) -> pd.DataFrame:
     out["site_capacity"] = pd.to_numeric(out[cap_col], errors="coerce").fillna(1).astype(int) if cap_col else 1
     out["capacity_left"] = out["site_capacity"].astype(int)
     out["site_type"] = out.apply(lambda r: detect_site_type(r.get("site_name"), r.get("site_field")), axis=1)
+
     sup_first = pick_col(out, SITE_COLS["sup_first"])
     sup_last  = pick_col(out, SITE_COLS["sup_last"])
     out["supervisor"] = ""
@@ -239,6 +274,7 @@ def resolve_sites(df: pd.DataFrame) -> pd.DataFrame:
         ff = out[sup_first] if sup_first else ""
         ll = out[sup_last]  if sup_last  else ""
         out["supervisor"] = (ff.astype(str) + " " + ll.astype(str)).str.strip()
+
     for c in ["site_name","site_field","site_street","site_city","site_type","supervisor"]:
         out[c] = out[c].apply(normalize_text)
     return out
@@ -247,20 +283,26 @@ def tokens(s: str) -> List[str]:
     return [t for t in str(s).replace(","," ").replace("/"," ").replace("-"," ").split() if t]
 
 def field_match_score(stu_pref: str, site_field: str) -> float:
-    if not stu_pref: 
+    if not stu_pref:
         return 50.0
-    sp = stu_pref.strip(); sf = site_field.strip()
-    if not sf: return 40.0
-    if sp and sp in sf: return 90.0
+    sp = stu_pref.strip(); sf = (site_field or "").strip()
+    if not sf:
+        return 40.0
+    if sp and sp in sf:
+        return 90.0
     tp = set([w for w in tokens(sp) if len(w) > 1])
     tf = set([w for w in tokens(sf) if len(w) > 1])
-    if tp.intersection(tf): return 75.0
+    if tp.intersection(tf):
+        return 75.0
     return 45.0
 
 def special_req_score(req: str, site_type: str, same_city: bool) -> float:
-    if not req: return 70.0
-    if "לא בבית חולים" in req and site_type == "בית חולים": return 0.0
-    if "קרוב" in req: return 90.0 if same_city else 55.0
+    if not req:
+        return 70.0
+    if "לא בבית חולים" in req and site_type == "בית חולים":
+        return 0.0
+    if "קרוב" in req:
+        return 90.0 if same_city else 55.0
     return 75.0
 
 def compute_score(stu: pd.Series, site: pd.Series, W: Weights) -> float:
@@ -275,7 +317,8 @@ def find_partner_map(students_df: pd.DataFrame) -> Dict[str,str]:
     ids = set(students_df["stu_id"]); m: Dict[str,str] = {}
     for _, r in students_df.iterrows():
         sid = r["stu_id"]; pid = r.get("stu_partner","")
-        if not pid: continue
+        if not pid:
+            continue
         if pid in ids and pid != sid:
             m[sid] = pid; continue
         for _, r2 in students_df.iterrows():
@@ -307,7 +350,7 @@ def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, W: Weights) 
     # בני/בנות זוג תחילה (אם אפשר לשבץ את שניהם)
     for _, s in students_df.iterrows():
         sid = s["stu_id"]
-        if sid in processed: 
+        if sid in processed:
             continue
         pid = partner_map.get(sid)
         if pid and partner_map.get(pid) == sid:
@@ -334,7 +377,7 @@ def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, W: Weights) 
                 results.append((s, rsite1))
                 results.append((s2, rsite2))
                 processed.add(sid); processed.add(pid)
-            # אם לא מצאנו שני מקומות – נעבור לשלב ה"בודדים" שיטפל בכל אחד בנפרד
+            # אם לא מצאנו שני מקומות – נמשיך לשיבוץ כבודדים
 
     # בודדים וכל מי שלא שובץ עד עכשיו
     for _, s in students_df.iterrows():
@@ -390,9 +433,24 @@ def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, W: Weights) 
     out = pd.DataFrame(rows)
     desired = ["ת\"ז הסטודנט","שם פרטי","שם משפחה","כתובת","עיר","מספר טלפון","אימייל",
                "אחוז התאמה","שם מקום ההתמחות","עיר המוסד","סוג מקום השיבוץ","תחום ההתמחות במוסד"]
-    # שומרות את הסדר, אבל לא מוחקות עמודות מקוריות: מציגות את הרצויות למעלה וממזגות את השאר
     remaining = [c for c in out.columns if c not in desired]
     return out[[c for c in desired if c in out.columns] + remaining]
+
+def to_xlsx_bytes(df: pd.DataFrame, sheet_name: str = "שיבוץ") -> bytes:
+    """
+    מייצר קובץ XLSX. קודם מנסה XlsxWriter; אם לא מותקן – נופל חזרה ל-openpyxl.
+    """
+    xlsx_io = BytesIO()
+    engine = None
+    try:
+        import xlsxwriter  # noqa: F401
+        engine = "xlsxwriter"
+    except Exception:
+        engine = "openpyxl"
+    with pd.ExcelWriter(xlsx_io, engine=engine) as writer:
+        df.to_excel(writer, index=False, sheet_name=sheet_name)
+    xlsx_io.seek(0)
+    return xlsx_io.getvalue()
 
 W = Weights()
 
@@ -404,7 +462,7 @@ st.markdown("""
 2. **קובץ אתרים/מדריכים (CSV/XLSX):** מוסד/שירות, תחום התמחות, רחוב, עיר, מספר סטודנטים שניתן לקלוט השנה.  
    אופציונלי: שם פרטי+שם משפחה של המדריך, טלפון, אימייל.
 3. לחיצה על **בצע שיבוץ** תחשב *אחוז התאמה* לפי תחום (70%), עיר (20%), בקשות (10%), כולל הפרדת בני/בנות זוג ואכיפת קיבולת.
-4. בסוף ניתן להוריד את קובץ התוצאות (CSV/XLSX).
+4. בסוף ניתן להוריד את קובץ התוצאות גם **CSV** וגם **XLSX** (בעברית מלאה).
 """)
 
 # ====== 2) דוגמה לשימוש ======
@@ -423,17 +481,21 @@ with colX:
     st.dataframe(example_students, use_container_width=True)
     st.download_button("⬇️ הורדת דוגמת סטודנטים (CSV)",
                        data=example_students.to_csv(index=False, encoding="utf-8-sig"),
-                       file_name="students_example.csv", mime="text/csv")
+                       file_name="students_example.csv", mime="text/csv", key="ex_stu_csv")
 with colY:
     st.write("**דוגמה – אתרי התמחות/מדריכים**")
     st.dataframe(example_sites, use_container_width=True)
     st.download_button("⬇️ הורדת דוגמת אתרים (CSV)",
                        data=example_sites.to_csv(index=False, encoding="utf-8-sig"),
-                       file_name="sites_example.csv", mime="text/csv")
+                       file_name="sites_example.csv", mime="text/csv", key="ex_sites_csv")
 
 # ====== 3) העלאת קבצים ======
 st.markdown("## 📤 העלאת קבצים")
 colA, colB = st.columns(2, gap="large")
+
+df_students_raw: Optional[pd.DataFrame] = None
+df_sites_raw: Optional[pd.DataFrame] = None
+
 with colA:
     students_file = st.file_uploader("קובץ סטודנטים", type=["csv","xlsx","xls"], key="students_file")
     if students_file is not None:
@@ -441,11 +503,8 @@ with colA:
         try:
             df_students_raw = read_any(students_file)
             st.dataframe(df_students_raw.head(5), use_container_width=True)
-        except Exception:
-            st.error("לא ניתן לקרוא את הקובץ.")
-            df_students_raw = None
-    else:
-        df_students_raw = None
+        except Exception as e:
+            st.error(f"לא ניתן לקרוא את קובץ הסטודנטים: {e}")
 
 with colB:
     sites_file = st.file_uploader("קובץ אתרי התמחות/מדריכים", type=["csv","xlsx","xls"], key="sites_file")
@@ -454,58 +513,67 @@ with colB:
         try:
             df_sites_raw = read_any(sites_file)
             st.dataframe(df_sites_raw.head(5), use_container_width=True)
-        except Exception:
-            st.error("לא ניתן לקרוא את הקובץ.")
-            df_sites_raw = None
-    else:
-        df_sites_raw = None
+        except Exception as e:
+            st.error(f"לא ניתן לקרוא את קובץ האתרים/מדריכים: {e}")
 
 # ====== 4) שיבוץ ======
 st.markdown("## ⚙️ ביצוע השיבוץ")
 run_btn = st.button("🚀 בצע שיבוץ", use_container_width=True)
 
-result_df = None
-unmatched_students = None
-unused_sites = None
+result_df: Optional[pd.DataFrame] = None
+unmatched_students: Optional[pd.DataFrame] = None
+unused_sites: Optional[pd.DataFrame] = None
 
 if run_btn:
-    if students_file is None or sites_file is None:
-        st.error("נא להעלות את שני הקבצים לפני הפעלת השיבוץ.")
-    else:
-        try:
-            students = resolve_students(df_students_raw)
-            sites = resolve_sites(df_sites_raw)
-            result_df = greedy_match(students, sites, W)
+    try:
+        # שכבת הגנה כפולה נגד None/ריק
+        _ensure_df(df_students_raw, "סטודנטים")
+        _ensure_df(df_sites_raw, "אתרים/מדריכים")
 
-            # --- סטודנטים שלא שובצו ---
-            unmatched_students = result_df[result_df["שם מקום ההתמחות"] == "לא שובץ"]
+        students = resolve_students(df_students_raw)
+        sites = resolve_sites(df_sites_raw)
+        result_df = greedy_match(students, sites, W)
 
-            # --- מוסדות שלא שובץ אליהם אף אחד ---
-            used_sites = set(result_df["שם מקום ההתמחות"].unique())
-            unused_sites = sites[~sites["site_name"].isin(used_sites)]
+        # --- סטודנטים שלא שובצו ---
+        unmatched_students = result_df[result_df["שם מקום ההתמחות"] == "לא שובץ"]
 
-            st.success("השיבוץ הושלם ✓")
-        except Exception as e:
-            st.exception(e)
+        # --- מוסדות שלא שובץ אליהם אף אחד ---
+        used_sites = set(result_df["שם מקום ההתמחות"].unique())
+        unused_sites = sites[~sites["site_name"].isin(used_sites)]
+
+        st.success("השיבוץ הושלם ✓")
+    except Exception as e:
+        st.exception(e)
 
 # ====== 5) תוצאות ======
 st.markdown("## 📊 תוצאות השיבוץ")
 if result_df is not None and not result_df.empty:
     st.dataframe(result_df, use_container_width=True)
 
-    # כפתור Excel בלבד
-    xlsx_io = BytesIO()
-    with pd.ExcelWriter(xlsx_io, engine="xlsxwriter") as writer:
-        result_df.to_excel(writer, index=False, sheet_name="שיבוץ")
-    xlsx_io.seek(0)
+    # הורדת CSV (UTF-8-BOM, ידידותי לאקסל בעברית)
+    csv_data = result_df.to_csv(index=False, encoding="utf-8-sig")
     st.download_button(
-        label="הורדת Excel (XLSX)",
-        data=xlsx_io.getvalue(),
-        file_name="student_site_matching.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        key="dl_xlsx",
-        help="excel-like"
+        label="⬇️ הורדת תוצאות (CSV)",
+        data=csv_data,
+        file_name="student_site_matching.csv",
+        mime="text/csv",
+        key="dl_csv",
+        help="קובץ CSV בפורמט עברי (UTF-8-SIG)"
     )
+
+    # הורדת XLSX עם fallback למנוע זמין
+    try:
+        xlsx_data = to_xlsx_bytes(result_df, sheet_name="שיבוץ")
+        st.download_button(
+            label="⬇️ הורדת תוצאות (XLSX)",
+            data=xlsx_data,
+            file_name="student_site_matching.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key="dl_xlsx",
+            help="קובץ Excel בעברית"
+        )
+    except Exception as e:
+        st.error(f"שגיאה ביצירת Excel: {e}. ניתן להשתמש ב-CSV לעת עתה.")
 
     # --- טבלה: סטודנטים שלא שובצו ---
     if unmatched_students is not None and not unmatched_students.empty:
@@ -516,6 +584,5 @@ if result_df is not None and not result_df.empty:
     if unused_sites is not None and not unused_sites.empty:
         st.markdown("### 🏫 מוסדות שלא שובץ אליהם אף סטודנט")
         st.dataframe(unused_sites[["site_name","site_city","site_field","site_capacity"]], use_container_width=True)
-
 else:
     st.caption("טרם הופעל שיבוץ או שאין תוצאות להצגה.")
