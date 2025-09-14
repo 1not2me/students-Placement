@@ -520,7 +520,7 @@ if isinstance(st.session_state["result_df"], pd.DataFrame) and not st.session_st
         try:
             xlsx_bytes = df_to_xlsx_bytes(st.session_state["result_df"])
             st.download_button(
-                label="⬇️ הורדת XLSX",
+                label="⬇️ הורדת XLSX / CSV",
                 data=xlsx_bytes,
                 file_name="student_site_matching.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
