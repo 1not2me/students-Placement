@@ -541,8 +541,7 @@ if isinstance(st.session_state["result_df"], pd.DataFrame) and not st.session_st
             st.session_state["unused_sites"][["site_name","site_city","site_field","site_capacity"]],
             use_container_width=True
         )
-else:
-    st.caption("טרם הופעל שיבוץ או שאין תוצאות להצגה.")
+
 
 
     # --- טבלאות נוספות ---
