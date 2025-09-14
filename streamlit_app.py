@@ -499,7 +499,7 @@ df_sites_raw: Optional[pd.DataFrame] = None
 with colA:
     students_file = st.file_uploader("קובץ סטודנטים", type=["csv","xlsx","xls"], key="students_file")
     if students_file is not None:
-        st.caption("הצצה ל-5 הרשומות הראשונות (לא מוחקים שום עמודה):")
+        st.caption("הצצה ל-5 הרשומות הראשונות :")
         try:
             df_students_raw = read_any(students_file)
             st.dataframe(df_students_raw.head(5), use_container_width=True)
@@ -509,7 +509,7 @@ with colA:
 with colB:
     sites_file = st.file_uploader("קובץ אתרי התמחות/מדריכים", type=["csv","xlsx","xls"], key="sites_file")
     if sites_file is not None:
-        st.caption("הצצה ל-5 הרשומות הראשונות (לא מוחקים שום עמודה):")
+        st.caption("הצצה ל-5 הרשומות הראשונות :")
         try:
             df_sites_raw = read_any(sites_file)
             st.dataframe(df_sites_raw.head(5), use_container_width=True)
