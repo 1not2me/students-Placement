@@ -511,34 +511,39 @@ if run_btn:
 # =========================
 st.markdown("## 📊 תוצאות השיבוץ")
 
+st.markdown("## 📊 תוצאות השיבוץ")
+
 if isinstance(st.session_state["result_df"], pd.DataFrame) and not st.session_state["result_df"].empty:
     st.dataframe(st.session_state["result_df"], use_container_width=True)
 
-    # --- שני כפתורי הורדה רחבים, זה לצד זה ---
-    bcol1, bcol2 = st.columns(2, gap="large")
-    with bcol1:
-        try:
-            xlsx_bytes = df_to_xlsx_bytes(st.session_state["result_df"])
-            st.download_button(
-                label="⬇️ הורדת XLSX / CSV",
-                data=xlsx_bytes,
-                file_name="student_site_matching.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                key="dl_xlsx_btn",
-                help="קובץ Excel בעברית"
-            )
-        except Exception as e:
-            st.error(f"שגיאה ביצירת Excel: {e}. השתמש/י ב-CSV בינתיים.")
-    with bcol2:
-        csv_bytes = df_to_excel_friendly_csv_bytes(st.session_state["result_df"])
+    # --- כפתור הורדת XLSX בלבד (רחב) ---
+    try:
+        xlsx_bytes = df_to_xlsx_bytes(st.session_state["result_df"])
         st.download_button(
-            label="⬇️ הורדת CSV",
-            data=csv_bytes,
-            file_name="student_site_matching.csv",
-            mime="text/csv",
-            key="dl_csv_btn",
-            help="CSV ידידותי לאקסל (נקודה־פסיק, UTF-8-SIG, ציטוט מלא)"
+            label="⬇️ הורדת XLSX / CSV",
+            data=xlsx_bytes,
+            file_name="student_site_matching.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key="dl_xlsx_btn",
+            help="קובץ Excel בעברית"
         )
+    except Exception as e:
+        st.error(f"שגיאה ביצירת Excel: {e}.")
+
+    # --- טבלאות נוספות ---
+    if isinstance(st.session_state["unmatched_students"], pd.DataFrame) and not st.session_state["unmatched_students"].empty:
+        st.markdown("### 👩‍🎓 סטודנטים שלא שובצו")
+        st.dataframe(st.session_state["unmatched_students"], use_container_width=True)
+
+    if isinstance(st.session_state["unused_sites"], pd.DataFrame) and not st.session_state["unused_sites"].empty:
+        st.markdown("### 🏫 מוסדות שלא שובץ אליהם אף סטודנט")
+        st.dataframe(
+            st.session_state["unused_sites"][["site_name","site_city","site_field","site_capacity"]],
+            use_container_width=True
+        )
+else:
+    st.caption("טרם הופעל שיבוץ או שאין תוצאות להצגה.")
+
 
     # --- טבלאות נוספות ---
     if isinstance(st.session_state["unmatched_students"], pd.DataFrame) and not st.session_state["unmatched_students"].empty:
