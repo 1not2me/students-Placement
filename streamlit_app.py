@@ -257,8 +257,9 @@ if isinstance(st.session_state["result_df"], pd.DataFrame) and not st.session_st
         st.error(f"שגיאה ביצירת Excel: {e}.")
 
     # --- טבלאות נוספות ---
-   if isinstance(st.session_state["result_df"], pd.DataFrame) and not st.session_state["result_df"].empty:
-     st.dataframe(st.session_state["result_df"], use_container_width=True)
+if isinstance(st.session_state["result_df"], pd.DataFrame) and not st.session_state["result_df"].empty:
+    st.dataframe(st.session_state["result_df"], use_container_width=True)
+
 
     try:
         xlsx_bytes = df_to_xlsx_bytes(st.session_state["result_df"])
