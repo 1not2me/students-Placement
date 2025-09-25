@@ -172,12 +172,21 @@ def resolve_sites(df: pd.DataFrame) -> pd.DataFrame:
     field_col = pick_col(out, SITE_COLS["field"])
     if not name_col or not field_col:
         raise ValueError("בקובץ האתרים חסרות עמודות חובה: שם מוסד / תחום ההתמחות.")
+
     out["site_name"]  = out[name_col]
     out["site_field"] = out[field_col].replace("", "רווחה")
+
+    # עיר
+    city_col = pick_col(out, SITE_COLS["city"])
+    out["site_city"] = out[city_col] if city_col else ""
+
+    # קיבולת
     cap_col = pick_col(out, SITE_COLS["capacity"])
     out["site_capacity"] = pd.to_numeric(out[cap_col], errors="coerce").fillna(1).astype(int) if cap_col else 1
     out["site_capacity"] = out["site_capacity"].clip(lower=1, upper=2)
     out["capacity_left"] = out["site_capacity"].astype(int)
+
+    # מדריך
     sup_first = pick_col(out, SITE_COLS["sup_first"])
     sup_last  = pick_col(out, SITE_COLS["sup_last"])
     out["supervisor"] = ""
@@ -185,10 +194,15 @@ def resolve_sites(df: pd.DataFrame) -> pd.DataFrame:
         ff = out[sup_first] if sup_first else ""
         ll = out[sup_last]  if sup_last else ""
         out["supervisor"] = (ff.astype(str) + " " + ll.astype(str)).str.strip()
+
+    # חוות דעת
     review_col = pick_col(out, SITE_COLS["review"])
     out["site_review"] = out[review_col] if review_col else ""
+
+    # נורמליזציה
     for c in ["site_name","site_field","site_city","supervisor","site_review"]:
         out[c] = out[c].apply(normalize_text)
+
     return out
 
 # ====== חישוב ציון התאמה ======
