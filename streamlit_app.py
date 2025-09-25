@@ -271,7 +271,7 @@ st.markdown("""
 1. **קובץ סטודנטים (CSV/XLSX):** שם פרטי, שם משפחה, תעודת זהות, כתובת/עיר, טלפון, אימייל.  
    אופציונלי: תחום מועדף, בקשה מיוחדת, בן/בת זוג להכשרה.  
 2. **קובץ אתרים/מדריכים (CSV/XLSX):** מוסד/שירות, תחום התמחות, רחוב, עיר, מספר סטודנטים שניתן לקלוט השנה, מדריך, חוות דעת מדריך.  
-3. **בצע שיבוץ** מחשב *אחוז התאמה* לפי תחום (50%), בקשות מיודות (45%), עיר (5%). 
+3. **בצע שיבוץ** מחשב *אחוז התאמה* לפי תחום (50%), בקשות מיוחדות (45%), עיר (5%). 
 4. בסוף אפשר להוריד **XLSX**. 
 """)
 
@@ -298,7 +298,7 @@ with colY:
     st.dataframe(example_sites, use_container_width=True)
 
 # =========================
-# 2) העלאת קבצים
+# 3) העלאת קבצים
 # =========================
 st.markdown("## 📤 העלאת קבצים")
 colA, colB = st.columns(2, gap="large")
@@ -321,11 +321,11 @@ with colB:
         except Exception as e:
             st.error(f"לא ניתן לקרוא את קובץ האתרים/מדריכים: {e}")
 
-for k in ["df_students_raw","df_sites_raw","result_df"]:
+for k in ["df_students_raw","df_sites_raw","result_df","unmatched_students","unused_sites"]:
     st.session_state.setdefault(k, None)
 
 # =========================
-# 3) שיבוץ
+# 4) שיבוץ
 # =========================
 st.markdown("## ⚙️ ביצוע השיבוץ")
 run_btn = st.button("🚀 בצע שיבוץ", use_container_width=True)
@@ -336,12 +336,20 @@ if run_btn:
         sites    = resolve_sites(st.session_state["df_sites_raw"])
         result_df = greedy_match(students, sites, Weights())
         st.session_state["result_df"] = result_df
+
+        # סטודנטים שלא שובצו
+        st.session_state["unmatched_students"] = result_df[result_df["שם מקום ההתמחות"] == "לא שובץ"]
+
+        # מוסדות שלא שובץ אליהם אף סטודנט
+        used_sites = set(result_df["שם מקום ההתמחות"].unique())
+        st.session_state["unused_sites"] = sites[~sites["site_name"].isin(used_sites)]
+
         st.success("השיבוץ הושלם ✓")
     except Exception as e:
         st.exception(e)
 
 # =========================
-# 4) תוצאות והורדות
+# 5) תוצאות והורדות
 # =========================
 st.markdown("## 📊 תוצאות השיבוץ")
 
@@ -359,3 +367,15 @@ if isinstance(st.session_state["result_df"], pd.DataFrame) and not st.session_st
         )
     except Exception as e:
         st.error(f"שגיאה ביצירת Excel: {e}.")
+
+    # --- טבלאות נוספות ---
+    if isinstance(st.session_state["unmatched_students"], pd.DataFrame) and not st.session_state["unmatched_students"].empty:
+        st.markdown("### 👩‍🎓 סטודנטים שלא שובצו")
+        st.dataframe(st.session_state["unmatched_students"], use_container_width=True)
+
+    if isinstance(st.session_state["unused_sites"], pd.DataFrame) and not st.session_state["unused_sites"].empty:
+        st.markdown("### 🏫 מוסדות שלא שובץ אליהם אף סטודנט")
+        st.dataframe(
+            st.session_state["unused_sites"][["site_name","site_city","site_field","site_capacity"]],
+            use_container_width=True
+        )
