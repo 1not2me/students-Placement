@@ -1,4 +1,4 @@
-# matcher_streamlit_beauty_rtl_v7.py
+# matcher_streamlit_beauty_rtl_v7_fixed.py
 # -*- coding: utf-8 -*-
 import streamlit as st
 import pandas as pd
@@ -133,7 +133,6 @@ h1, h2, h3, h4, h5, h6 {
 </style>
 """, unsafe_allow_html=True)
 
-
 # ====== כותרת ======
 st.markdown("<h1>מערכת שיבוץ סטודנטים – התאמה חכמה</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align:center;color:#475569;margin-top:-8px;'>כאן משבצים סטודנטים למקומות התמחות בקלות, בהתבסס על תחום, עיר ובקשות.</p>", unsafe_allow_html=True)
@@ -170,13 +169,12 @@ SITE_COLS = {
     "sup_last": ["שם משפחה"],
     "phone": ["טלפון"],
     "email": ["אימייל", "כתובת מייל", "דוא\"ל", "דוא״ל"],
-    "review": ["חוות דעת מדריך"]  # הוספנו שדה חדש
+    "review": ["חוות דעת מדריך"]
 }
 
 def pick_col(df: pd.DataFrame, options: List[str]) -> Optional[str]:
     for opt in options:
-        if opt in df.columns:
-            return opt
+        if opt in df.columns: return opt
     return None
 
 # ----- קריאת קבצים -----
@@ -273,75 +271,28 @@ def df_to_xlsx_bytes(df: pd.DataFrame, sheet_name: str = "שיבוץ") -> bytes:
     xlsx_io = BytesIO()
     import xlsxwriter
     with pd.ExcelWriter(xlsx_io, engine="xlsxwriter") as writer:
-        # סדר העמודות – אחוז התאמה אחרון
-        cols = [c for c in df.columns if c != "אחוז התאמה"] + ["אחוז התאמה"]
+        cols = list(df.columns)
+        has_match_col = "אחוז התאמה" in cols
+        if has_match_col:
+            cols = [c for c in cols if c != "אחוז התאמה"] + ["אחוז התאמה"]
+
         df[cols].to_excel(writer, index=False, sheet_name=sheet_name)
-        workbook  = writer.book
-        worksheet = writer.sheets[sheet_name]
-        # צבע אדום לעמודת אחוז התאמה
-        red_fmt = workbook.add_format({"font_color": "red"})
-        col_idx = len(cols)-1
-        worksheet.set_column(col_idx, col_idx, 12, red_fmt)
+
+        if has_match_col:
+            workbook  = writer.book
+            worksheet = writer.sheets[sheet_name]
+            red_fmt = workbook.add_format({"font_color": "red"})
+            col_idx = len(cols) - 1
+            worksheet.set_column(col_idx, col_idx, 12, red_fmt)
     xlsx_io.seek(0)
     return xlsx_io.getvalue()
 
 # =========================
-# 1) הוראות שימוש
+# שיבוץ והצגת תוצאות
 # =========================
-st.markdown("## 📘 הוראות שימוש")
-st.markdown("""
-1. **קובץ סטודנטים (CSV/XLSX):** שם פרטי, שם משפחה, תעודת זהות, כתובת/עיר, טלפון, אימייל.  
-   אופציונלי: תחום מועדף, בקשה מיוחדת, בן/בת זוג להכשרה.  
-2. **קובץ אתרים/מדריכים (CSV/XLSX):** מוסד/שירות, תחום התמחות, רחוב, עיר, מספר סטודנטים שניתן לקלוט השנה, מדריך, חוות דעת מדריך.  
-3. **בצע שיבוץ** מחשב *אחוז התאמה* לפי תחום (50%), בקשות מיוחדות (45%), עיר (5%). 
-4. בסוף אפשר להוריד **XLSX**. 
-""")
+if "result_df" not in st.session_state:
+    st.session_state["result_df"] = None
 
-# =========================
-# 2) דוגמה לשימוש
-# =========================
-st.markdown("## 🧪 דוגמה לשימוש")
-example_students = pd.DataFrame([
-    {"שם פרטי":"רות", "שם משפחה":"כהן", "תעודת זהות":"123456789", "עיר מגורים":"תל אביב", "טלפון":"0501111111", "דוא\"ל":"ruth@example.com", "תחום מועדף":"בריאות הנפש", "בקשה מיוחדת":"קרוב לבית"},
-    {"שם פרטי":"יואב", "שם משפחה":"לוי", "תעודת זהות":"987654321", "עיר מגורים":"חיפה", "טלפון":"0502222222", "דוא\"ל":"yoav@example.com", "תחום מועדף":"רווחה"},
-    {"שם פרטי":"סמאח", "שם משפחה":"ח'ורי", "תעודת זהות":"456789123", "עיר מגורים":"עכו", "טלפון":"0503333333", "דוא\"ל":"sama@example.com", "תחום מועדף":"חינוך מיוחד"},
-])
-example_sites = pd.DataFrame([
-    {"מוסד / שירות הכשרה":"מרכז חוסן תל אביב", "תחום ההתמחות":"בריאות הנפש", "עיר":"תל אביב", "מספר סטודנטים שניתן לקלוט השנה":2, "שם פרטי":"דניאל", "שם משפחה":"כהן", "חוות דעת מדריך":"מדריך מצוין"},
-    {"מוסד / שירות הכשרה":"מחלקת רווחה חיפה", "תחום ההתמחות":"רווחה", "עיר":"חיפה", "מספר סטודנטים שניתן לקלוט השנה":1, "שם פרטי":"מיכל", "שם משפחה":"לוי", "חוות דעת מדריך":"זקוקה לשיפור"},
-    {"מוסד / שירות הכשרה":"בית ספר יד לבנים", "תחום ההתמחות":"חינוך מיוחד", "עיר":"עכו", "מספר סטודנטים שניתן לקלוט השנה":1, "שם פרטי":"שרה", "שם משפחה":"כהן"},
-])
-colX, colY = st.columns(2, gap="large")
-with colX:
-    st.write("**דוגמה – סטודנטים**")
-    st.dataframe(example_students, use_container_width=True)
-with colY:
-    st.write("**דוגמה – אתרי התמחות/מדריכים**")
-    st.dataframe(example_sites, use_container_width=True)
-
-
-# =========================
-# העלאת קבצים
-# =========================
-st.markdown("## 📤 העלאת קבצים")
-colA, colB = st.columns(2, gap="large")
-with colA:
-    students_file = st.file_uploader("קובץ סטודנטים", type=["csv","xlsx","xls"], key="students_file")
-    if students_file is not None:
-        st.session_state["df_students_raw"] = read_any(students_file)
-        st.dataframe(st.session_state["df_students_raw"].head(5), use_container_width=True)
-with colB:
-    sites_file = st.file_uploader("קובץ אתרי התמחות", type=["csv","xlsx","xls"], key="sites_file")
-    if sites_file is not None:
-        st.session_state["df_sites_raw"] = read_any(sites_file)
-        st.dataframe(st.session_state["df_sites_raw"].head(5), use_container_width=True)
-
-for k in ["df_students_raw","df_sites_raw","result_df"]:
-    st.session_state.setdefault(k, None)
-
-# =========================
-# שיבוץ
-# =========================
 st.markdown("## ⚙️ ביצוע השיבוץ")
 if st.button("🚀 בצע שיבוץ", use_container_width=True):
     try:
@@ -353,14 +304,17 @@ if st.button("🚀 בצע שיבוץ", use_container_width=True):
     except Exception as e:
         st.exception(e)
 
-# =========================
-# תוצאות
-# =========================
 if isinstance(st.session_state["result_df"], pd.DataFrame) and not st.session_state["result_df"].empty:
     st.markdown("## 📊 תוצאות השיבוץ")
     st.dataframe(st.session_state["result_df"], use_container_width=True)
 
-    # טבלת סיכום לפי מוסד
+    # הורדת תוצאות השיבוץ
+    xlsx_results = df_to_xlsx_bytes(st.session_state["result_df"], sheet_name="תוצאות")
+    st.download_button("⬇️ הורדת XLSX – תוצאות השיבוץ", data=xlsx_results,
+        file_name="student_site_matching.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+    # טבלת סיכום
     summary_df = (
         st.session_state["result_df"]
         .groupby(["שם מקום ההתמחות","עיר המוסד","תחום ההתמחות במוסד","מדריך"])
@@ -373,31 +327,24 @@ if isinstance(st.session_state["result_df"], pd.DataFrame) and not st.session_st
     summary_df.rename(columns={"ת\"ז הסטודנט":"כמה סטודנטים"}, inplace=True)
     summary_df["המלצת שיבוץ"] = summary_df["שם פרטי"] + " " + summary_df["שם משפחה"]
     summary_df = summary_df[["שם מקום ההתמחות","תחום ההתמחות במוסד","מדריך","כמה סטודנטים","המלצת שיבוץ"]]
-    try:
-        xlsx_bytes = df_to_xlsx_bytes(st.session_state["result_df"])
-        st.download_button(
-            label="⬇️ הורדת XLSX – תוצאות השיבוץ",
-            data=xlsx_bytes,
-            file_name="student_site_matching.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            key="dl_xlsx_results"
-        )
-    except Exception as e:
-        st.error(f"שגיאה ביצירת Excel: {e}.")
 
     st.markdown("### 📝 טבלת סיכום לפי מקום הכשרה")
     st.dataframe(summary_df, use_container_width=True)
 
-    
-    # הורדת קובץ Excel – טבלת סיכום לפי מקום הכשרה
-    try:
-        xlsx_summary = df_to_xlsx_bytes(summary_df, sheet_name="סיכום")
-        st.download_button(
-            label="⬇️ הורדת XLSX – טבלת סיכום",
-            data=xlsx_summary,
-            file_name="student_site_summary.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            key="dl_xlsx_summary"
-        )
-    except Exception as e:
-        st.error(f"שגיאה ביצירת Excel (סיכום): {e}.")
+    # הורדת טבלת הסיכום
+    xlsx_summary = df_to_xlsx_bytes(summary_df, sheet_name="סיכום")
+    st.download_button("⬇️ הורדת XLSX – טבלת סיכום", data=xlsx_summary,
+        file_name="student_site_summary.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+  
+# --- טבלאות נוספות ---
+if isinstance(st.session_state["unmatched_students"], pd.DataFrame) and not st.session_state["unmatched_students"].empty:
+    st.markdown("### 👩‍🎓 סטודנטים שלא שובצו")
+    st.dataframe(st.session_state["unmatched_students"], use_container_width=True)
+
+if isinstance(st.session_state["unused_sites"], pd.DataFrame) and not st.session_state["unused_sites"].empty:
+    st.markdown("### 🏫 מוסדות שלא שובץ אליהם אף סטודנט")
+    st.dataframe(
+        st.session_state["unused_sites"][["site_name","site_city","site_field","site_capacity"]],
+        use_container_width=True
+    )
