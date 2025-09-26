@@ -91,6 +91,47 @@ div[data-testid="stDownloadButton"] > button:focus{
 label,.stMarkdown,.stText,.stCaption{ text-align:right!important; }
 </style>
 """, unsafe_allow_html=True)
+st.markdown("""
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Assistant:wght@300;400;600;700&family=Noto+Sans+Hebrew:wght@400;600&display=swap" rel="stylesheet">
+
+<style>
+:root { --app-font: 'Assistant', 'Noto Sans Hebrew', 'Segoe UI', -apple-system, sans-serif; }
+
+/* בסיס האפליקציה */
+html, body, .stApp, [data-testid="stAppViewContainer"], .main {
+  font-family: var(--app-font) !important;
+}
+
+/* ודא שכל הצאצאים יורשים את הפונט */
+.stApp * {
+  font-family: var(--app-font) !important;
+}
+
+/* רכיבי קלט/בחירה של Streamlit */
+div[data-baseweb], /* select/radio/checkbox */
+.stTextInput input,
+.stTextArea textarea,
+.stSelectbox div,
+.stMultiSelect div,
+.stRadio,
+.stCheckbox,
+.stButton > button {
+  font-family: var(--app-font) !important;
+}
+
+/* טבלאות DataFrame/Arrow */
+div[data-testid="stDataFrame"] div {
+  font-family: var(--app-font) !important;
+}
+
+/* כותרות */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--app-font) !important;
+}
+</style>
+""", unsafe_allow_html=True)
 
 
 # ====== כותרת ======
