@@ -373,19 +373,31 @@ if isinstance(st.session_state["result_df"], pd.DataFrame) and not st.session_st
     summary_df.rename(columns={"ת\"ז הסטודנט":"כמה סטודנטים"}, inplace=True)
     summary_df["המלצת שיבוץ"] = summary_df["שם פרטי"] + " " + summary_df["שם משפחה"]
     summary_df = summary_df[["שם מקום ההתמחות","תחום ההתמחות במוסד","מדריך","כמה סטודנטים","המלצת שיבוץ"]]
+    try:
+        xlsx_bytes = df_to_xlsx_bytes(st.session_state["result_df"])
+        st.download_button(
+            label="⬇️ הורדת XLSX – תוצאות השיבוץ",
+            data=xlsx_bytes,
+            file_name="student_site_matching.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key="dl_xlsx_results"
+        )
+    except Exception as e:
+        st.error(f"שגיאה ביצירת Excel: {e}.")
 
     st.markdown("### 📝 טבלת סיכום לפי מקום הכשרה")
     st.dataframe(summary_df, use_container_width=True)
 
-    # הורדת אקסל
+    
+    # הורדת קובץ Excel – טבלת סיכום לפי מקום הכשרה
     try:
-        xlsx_bytes = df_to_xlsx_bytes(st.session_state["result_df"])
+        xlsx_summary = df_to_xlsx_bytes(summary_df, sheet_name="סיכום")
         st.download_button(
-            label="⬇️ הורדת XLSX",
-            data=xlsx_bytes,
-            file_name="student_site_matching.xlsx",
+            label="⬇️ הורדת XLSX – טבלת סיכום",
+            data=xlsx_summary,
+            file_name="student_site_summary.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            key="dl_xlsx_btn"
+            key="dl_xlsx_summary"
         )
     except Exception as e:
-        st.error(f"שגיאה ביצירת Excel: {e}.")
+        st.error(f"שגיאה ביצירת Excel (סיכום): {e}.")
