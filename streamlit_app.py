@@ -15,11 +15,12 @@ st.set_page_config(page_title="מערכת שיבוץ סטודנטים – התא
 # ====== CSS – עיצוב מודרני + RTL ======
 st.markdown("""
 <style>
-@font-face {
-  font-family:'David';
-  src:url('https://example.com/David.ttf') format('truetype');
+/* טעינת פונט עברי מגוגל (אפשר לשנות ל-Assistant, Heebo, Varela Round וכו') */
+@import url('https://fonts.googleapis.com/css2?family=Rubik:wght@400;600&display=swap');
+
+html, body, [class*="css"] { 
+  font-family: 'Rubik', 'David', sans-serif !important; 
 }
-html, body, [class*="css"] { font-family:'David',sans-serif!important; }
 
 :root{
   --bg-1:#e0f7fa;
@@ -76,14 +77,21 @@ div[data-testid="stDownloadButton"] > button{
   width:100% !important;
 }
 .stButton > button:hover,
-div[data-testid="stDownloadButton"] > button:hover{ transform:translateY(-3px) scale(1.02); filter:brightness(1.08); }
+div[data-testid="stDownloadButton"] > button:hover{ 
+  transform:translateY(-3px) scale(1.02); 
+  filter:brightness(1.08); 
+}
 .stButton > button:focus,
-div[data-testid="stDownloadButton"] > button:focus{ outline:none!important; box-shadow:0 0 0 4px var(--ring)!important; }
+div[data-testid="stDownloadButton"] > button:focus{ 
+  outline:none!important; 
+  box-shadow:0 0 0 4px var(--ring)!important; 
+}
 
 .stApp,.main,[data-testid="stSidebar"]{ direction:rtl; text-align:right; }
 label,.stMarkdown,.stText,.stCaption{ text-align:right!important; }
 </style>
 """, unsafe_allow_html=True)
+
 
 # ====== כותרת ======
 st.markdown("<h1>מערכת שיבוץ סטודנטים – התאמה חכמה</h1>", unsafe_allow_html=True)
