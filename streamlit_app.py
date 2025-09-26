@@ -265,6 +265,34 @@ with colX:
 with colY:
     st.write("**דוגמה – אתרי התמחות/מדריכים**")
     st.dataframe(example_sites, use_container_width=True)
+
+# =========================
+# 3) העלאת קבצים
+# =========================
+st.markdown("## 📤 העלאת קבצים")
+colA, colB = st.columns(2, gap="large")
+
+with colA:
+    students_file = st.file_uploader("קובץ סטודנטים", type=["csv","xlsx","xls"], key="students_file")
+    if students_file is not None:
+        try:
+            st.session_state["df_students_raw"] = read_any(students_file)
+            st.dataframe(st.session_state["df_students_raw"].head(5), use_container_width=True)
+        except Exception as e:
+            st.error(f"לא ניתן לקרוא את קובץ הסטודנטים: {e}")
+
+with colB:
+    sites_file = st.file_uploader("קובץ אתרי התמחות/מדריכים", type=["csv","xlsx","xls"], key="sites_file")
+    if sites_file is not None:
+        try:
+            st.session_state["df_sites_raw"] = read_any(sites_file)
+            st.dataframe(st.session_state["df_sites_raw"].head(5), use_container_width=True)
+        except Exception as e:
+            st.error(f"לא ניתן לקרוא את קובץ האתרים/מדריכים: {e}")
+
+for k in ["df_students_raw","df_sites_raw","result_df","unmatched_students","unused_sites"]:
+    st.session_state.setdefault(k, None)
+
 # ====== שיבוץ ======
 def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, W: Weights) -> pd.DataFrame:
     results = []
