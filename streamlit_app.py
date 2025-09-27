@@ -222,57 +222,122 @@ def resolve_sites(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 # ====== חישוב ציון ======
-def compute_score(stu: pd.Series, site: pd.Series, W: Weights) -> float:
-    # ========================
-    # 1. תחום התמחות – 50%
-    # ========================
-    field_match = 0
-    stu_field = str(stu.get("stu_pref", "")).strip()
-    site_field = str(site.get("site_field", "")).strip()
-    if stu_field and site_field:
-        if stu_field == site_field:
-            field_match = 1.0   # התאמה מלאה
-        elif stu_field in site_field or site_field in stu_field:
-            field_match = 0.7   # התאמה חלקית (אותו תחום כללי)
+def norm(x):
+    if pd.isna(x):
+        return ""
+    return str(x).strip().lower()
+
+def compute_match(stu, site, w_field=0.5, w_req=0.45, w_city=0.05):
+    # תחום התמחות
+    f_score = 100 if norm(stu.get("stu_pref")) in norm(site.get("site_field")) else 0
+
+    # בקשה מיוחדת
+    r_score = 0
+    if norm(stu.get("stu_req")) and norm(stu.get("stu_req")) in norm(site.get("בקשות מיוחדות","")):
+        r_score = 100
+    elif norm(stu.get("stu_req")) == "":
+        r_score = 70
+
+    # עיר
+    c_score = 100 if norm(stu.get("stu_city")) and norm(stu.get("stu_city")) == norm(site.get("site_city")) else 0
+
+    # משוקלל
+    score = w_field*f_score + w_req*r_score + w_city*c_score
+    return round(score, 1)
+
+# ====== שיבוץ ======
+def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, W: Weights) -> pd.DataFrame:
+    results = []
+    supervisor_count = {}
+
+    for _, s in students_df.iterrows():
+        cand = sites_df[sites_df["capacity_left"] > 0].copy()
+        if cand.empty:
+            results.append({
+                "ת\"ז הסטודנט": s["stu_id"],
+                "שם פרטי": s["stu_first"],
+                "שם משפחה": s["stu_last"],
+                "שם מקום ההתמחות": "לא שובץ",
+                "עיר המוסד": "",
+                "תחום ההתמחות במוסד": "",
+                "שם המדריך": "",
+                "אחוז התאמה": 0
+            })
+            continue
+
+        # כאן התיקון – שימוש ב-compute_match
+        cand["score"] = cand.apply(lambda r: compute_match(s, r, W.w_field, W.w_special, W.w_city), axis=1)
+
+        # סינון לפי מדריך (עד 2 סטודנטים)
+        def allowed_supervisor(r):
+            sup = r.get("שם המדריך", "")
+            return supervisor_count.get(sup, 0) < 2
+
+        cand = cand[cand.apply(allowed_supervisor, axis=1)]
+
+        if cand.empty:
+            all_sites = sites_df[sites_df["capacity_left"] > 0].copy()
+            if all_sites.empty:
+                results.append({
+                    "ת\"ז הסטודנט": s["stu_id"],
+                    "שם פרטי": s["stu_first"],
+                    "שם משפחה": s["stu_last"],
+                    "שם מקום ההתמחות": "לא שובץ",
+                    "עיר המוסד": "",
+                    "תחום ההתמחות במוסד": "",
+                    "שם המדריך": "",
+                    "אחוז התאמה": 0
+                })
+                continue
+            all_sites["score"] = all_sites.apply(lambda r: compute_match(s, r, W.w_field, W.w_special, W.w_city), axis=1)
+            cand = all_sites.sort_values("score", ascending=False).head(1)
         else:
-            field_match = 0.0   # אין התאמה
+            cand = cand.sort_values("score", ascending=False)
 
-    # ========================
-    # 2. בקשות מיוחדות – 45%
-    # ========================
-    special_match = 0
-    stu_req = str(stu.get("stu_req", "")).strip()
-    site_req = str(site.get("בקשות מיוחדות", "")).strip()
+        chosen = cand.iloc[0]
+        idx = chosen.name
+        sites_df.at[idx, "capacity_left"] -= 1
 
-    if not stu_req or stu_req == "אין":
-        special_match = 0.5   # אין בקשה מיוחדת = ניטרלי
-    else:
-        if "קרוב" in stu_req and stu.get("stu_city") == site.get("site_city"):
-            special_match = 1.0
-        elif "נגיש" in stu_req and "נגיש" in site_req:
-            special_match = 1.0
-        else:
-            special_match = 0.0
+        sup_name = chosen.get("שם המדריך", "")
+        supervisor_count[sup_name] = supervisor_count.get(sup_name, 0) + 1
 
-    # ========================
-    # 3. עיר – 5%
-    # ========================
-    city_match = 0
-    if stu.get("stu_city") and site.get("site_city"):
-        if stu["stu_city"].strip() == site["site_city"].strip():
-            city_match = 1.0
-        else:
-            city_match = 0.0
+        results.append({
+            "ת\"ז הסטודנט": s["stu_id"],
+            "שם פרטי": s["stu_first"],
+            "שם משפחה": s["stu_last"],
+            "שם מקום ההתמחות": chosen["site_name"],
+            "עיר המוסד": chosen.get("site_city", ""),
+            "תחום ההתמחות במוסד": chosen["site_field"],
+            "שם המדריך": sup_name,
+            "אחוז התאמה": round(chosen["score"], 1)
+        })
 
-    # ========================
-    # ניקוד סופי
-    # ========================
-    score = (
-        W.w_field * (field_match * 100) +
-        W.w_special * (special_match * 100) +
-        W.w_city * (city_match * 100)
-    )
-    return round(float(score), 1)
+    return pd.DataFrame(results)
+
+# ---- יצירת XLSX ----
+def df_to_xlsx_bytes(df: pd.DataFrame, sheet_name: str = "שיבוץ") -> bytes:
+    xlsx_io = BytesIO()
+    import xlsxwriter
+    with pd.ExcelWriter(xlsx_io, engine="xlsxwriter") as writer:
+        cols = list(df.columns)
+        has_match_col = "אחוז התאמה" in cols
+        if has_match_col:
+            cols = [c for c in cols if c != "אחוז התאמה"] + ["אחוז התאמה"]
+
+        df[cols].to_excel(writer, index=False, sheet_name=sheet_name)
+
+        if has_match_col:
+            workbook  = writer.book
+            worksheet = writer.sheets[sheet_name]
+            red_fmt = workbook.add_format({"font_color": "red"})
+            col_idx = len(cols) - 1
+            worksheet.set_column(col_idx, col_idx, 12, red_fmt)
+    xlsx_io.seek(0)
+    return xlsx_io.getvalue()
+
+# =========================
+# הוראות שימוש, דוגמה, העלאות ושאר הקוד שלך נשארים כמו שהיו
+# =========================
 
 # =========================
 # 1) הוראות שימוש
