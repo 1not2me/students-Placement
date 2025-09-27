@@ -12,7 +12,7 @@ from typing import Optional, Any, List
 # =========================
 st.set_page_config(page_title="מערכת שיבוץ סטודנטים – התאמה חכמה", layout="wide")
 
-# ====== CSS – עיצוב מודרני + RTL ======
+
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Rubik:wght@400;600&display=swap');
@@ -131,6 +131,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 </style>
 """, unsafe_allow_html=True)
+
 # ====== כותרת ======
 st.markdown("<h1>מערכת שיבוץ סטודנטים – התאמה חכמה</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align:center;color:#475569;margin-top:-8px;'>כאן משבצים סטודנטים למקומות התמחות בקלות, בהתבסס על תחום, עיר ובקשות.</p>", unsafe_allow_html=True)
@@ -246,7 +247,6 @@ def compute_match(stu, site, w_field=0.5, w_req=0.45, w_city=0.05):
     return round(score, 1)
 
 # ====== שיבוץ ======
-# ====== שיבוץ ======
 def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, W: Weights) -> pd.DataFrame:
     results = []
     supervisor_count = {}
@@ -266,10 +266,9 @@ def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, W: Weights) 
             })
             continue
 
-        # ✅ שימוש ב-compute_match במקום compute_score
+        # ✅ חישוב ציון התאמה עם compute_match במקום compute_score
         cand["score"] = cand.apply(lambda r: compute_match(s, r, W.w_field, W.w_special, W.w_city), axis=1)
 
-        # סינון לפי מדריך (עד 2 סטודנטים)
         def allowed_supervisor(r):
             sup = r.get("שם המדריך", "")
             return supervisor_count.get(sup, 0) < 2
@@ -291,7 +290,6 @@ def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, W: Weights) 
                 })
                 continue
 
-            # ✅ גם כאן compute_match
             all_sites["score"] = all_sites.apply(lambda r: compute_match(s, r, W.w_field, W.w_special, W.w_city), axis=1)
             cand = all_sites.sort_values("score", ascending=False).head(1)
         else:
@@ -316,167 +314,6 @@ def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, W: Weights) 
         })
 
     return pd.DataFrame(results)
-
-# ---- יצירת XLSX ----
-def df_to_xlsx_bytes(df: pd.DataFrame, sheet_name: str = "שיבוץ") -> bytes:
-    xlsx_io = BytesIO()
-    import xlsxwriter
-    with pd.ExcelWriter(xlsx_io, engine="xlsxwriter") as writer:
-        cols = list(df.columns)
-        has_match_col = "אחוז התאמה" in cols
-        if has_match_col:
-            cols = [c for c in cols if c != "אחוז התאמה"] + ["אחוז התאמה"]
-
-        df[cols].to_excel(writer, index=False, sheet_name=sheet_name)
-
-        if has_match_col:
-            workbook  = writer.book
-            worksheet = writer.sheets[sheet_name]
-            red_fmt = workbook.add_format({"font_color": "red"})
-            col_idx = len(cols) - 1
-            worksheet.set_column(col_idx, col_idx, 12, red_fmt)
-    xlsx_io.seek(0)
-    return xlsx_io.getvalue()
-
-# =========================
-# הוראות שימוש, דוגמה, העלאות ושאר הקוד שלך נשארים כמו שהיו
-# =========================
-
-# =========================
-# 1) הוראות שימוש
-# =========================
-st.markdown("## 📘 הוראות שימוש")
-st.markdown("""
-1. **קובץ סטודנטים (CSV/XLSX):** שם פרטי, שם משפחה, תעודת זהות, כתובת/עיר, טלפון, אימייל.  
-   אופציונלי: תחום מועדף, בקשה מיוחדת, בן/בת זוג להכשרה.  
-2. **קובץ אתרים/מדריכים (CSV/XLSX):** מוסד/שירות, תחום התמחות, רחוב, עיר, מספר סטודנטים שניתן לקלוט השנה, מדריך, חוות דעת מדריך.  
-3. **בצע שיבוץ** מחשב *אחוז התאמה* לפי תחום (50%), בקשות מיוחדות (45%), עיר (5%). 
-4. בסוף אפשר להוריד **XLSX**. 
-""")
-
-# =========================
-# 2) דוגמה לשימוש
-# =========================
-st.markdown("## 🧪 דוגמה לשימוש")
-example_students = pd.DataFrame([
-    {"שם פרטי":"רות", "שם משפחה":"כהן", "תעודת זהות":"123456789", "עיר מגורים":"תל אביב", "טלפון":"0501111111", "דוא\"ל":"ruth@example.com", "תחום מועדף":"בריאות הנפש", "בקשה מיוחדת":"קרוב לבית"},
-    {"שם פרטי":"יואב", "שם משפחה":"לוי", "תעודת זהות":"987654321", "עיר מגורים":"חיפה", "טלפון":"0502222222", "דוא\"ל":"yoav@example.com", "תחום מועדף":"רווחה"},
-    {"שם פרטי":"סמאח", "שם משפחה":"ח'ורי", "תעודת זהות":"456789123", "עיר מגורים":"עכו", "טלפון":"0503333333", "דוא\"ל":"sama@example.com", "תחום מועדף":"חינוך מיוחד"},
-])
-example_sites = pd.DataFrame([
-    {"מוסד / שירות הכשרה":"מרכז חוסן תל אביב", "תחום ההתמחות":"בריאות הנפש", "עיר":"תל אביב", "מספר סטודנטים שניתן לקלוט השנה":2, "שם פרטי":"דניאל", "שם משפחה":"כהן", "חוות דעת מדריך":"מדריך מצוין"},
-    {"מוסד / שירות הכשרה":"מחלקת רווחה חיפה", "תחום ההתמחות":"רווחה", "עיר":"חיפה", "מספר סטודנטים שניתן לקלוט השנה":1, "שם פרטי":"מיכל", "שם משפחה":"לוי", "חוות דעת מדריך":"זקוקה לשיפור"},
-    {"מוסד / שירות הכשרה":"בית ספר יד לבנים", "תחום ההתמחות":"חינוך מיוחד", "עיר":"עכו", "מספר סטודנטים שניתן לקלוט השנה":1, "שם פרטי":"שרה", "שם משפחה":"כהן"},
-])
-colX, colY = st.columns(2, gap="large")
-with colX:
-    st.write("**דוגמה – סטודנטים**")
-    st.dataframe(example_students, use_container_width=True)
-with colY:
-    st.write("**דוגמה – אתרי התמחות/מדריכים**")
-    st.dataframe(example_sites, use_container_width=True)
-
-# =========================
-# 3) העלאת קבצים
-# =========================
-st.markdown("## 📤 העלאת קבצים")
-colA, colB = st.columns(2, gap="large")
-
-with colA:
-    students_file = st.file_uploader("קובץ סטודנטים", type=["csv","xlsx","xls"], key="students_file")
-    if students_file is not None:
-        try:
-            st.session_state["df_students_raw"] = read_any(students_file)
-            st.dataframe(st.session_state["df_students_raw"].head(5), use_container_width=True)
-        except Exception as e:
-            st.error(f"לא ניתן לקרוא את קובץ הסטודנטים: {e}")
-
-with colB:
-    sites_file = st.file_uploader("קובץ אתרי התמחות/מדריכים", type=["csv","xlsx","xls"], key="sites_file")
-    if sites_file is not None:
-        try:
-            st.session_state["df_sites_raw"] = read_any(sites_file)
-            st.dataframe(st.session_state["df_sites_raw"].head(5), use_container_width=True)
-        except Exception as e:
-            st.error(f"לא ניתן לקרוא את קובץ האתרים/מדריכים: {e}")
-
-for k in ["df_students_raw","df_sites_raw","result_df","unmatched_students","unused_sites"]:
-    st.session_state.setdefault(k, None)
-
-
-# ====== שיבוץ ======
-# ====== שיבוץ ======
-def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, W: Weights) -> pd.DataFrame:
-    results = []
-    # עוקב אחרי כמה סטודנטים שובצו לכל מדריך
-    supervisor_count = {}
-
-    for _, s in students_df.iterrows():
-        cand = sites_df[sites_df["capacity_left"] > 0].copy()
-        if cand.empty:
-            results.append({
-                "ת\"ז הסטודנט": s["stu_id"],
-                "שם פרטי": s["stu_first"],
-                "שם משפחה": s["stu_last"],
-                "שם מקום ההתמחות": "לא שובץ",
-                "עיר המוסד": "",
-                "תחום ההתמחות במוסד": "",
-                "שם המדריך": "",
-                "אחוז התאמה": 0
-            })
-            continue
-
-        # חישוב ציון התאמה לכל מוסד
-        cand["score"] = cand.apply(lambda r: compute_score(s, r, W), axis=1)
-
-        # סינון לפי מדריך: מותר עד 2 סטודנטים לכל מדריך
-        def allowed_supervisor(r):
-            sup = r.get("שם המדריך", "")
-            return supervisor_count.get(sup, 0) < 2
-
-        cand = cand[cand.apply(allowed_supervisor, axis=1)]
-
-        if cand.empty:
-            # אם אין מדריכים פנויים בתחום – נבחר תחום קרוב (מוסד עם תחום דומה)
-            all_sites = sites_df[sites_df["capacity_left"] > 0].copy()
-            if all_sites.empty:
-                results.append({
-                    "ת\"ז הסטודנט": s["stu_id"],
-                    "שם פרטי": s["stu_first"],
-                    "שם משפחה": s["stu_last"],
-                    "שם מקום ההתמחות": "לא שובץ",
-                    "עיר המוסד": "",
-                    "תחום ההתמחות במוסד": "",
-                    "שם המדריך": "",
-                    "אחוז התאמה": 0
-                })
-                continue
-
-            all_sites["score"] = all_sites.apply(lambda r: compute_score(s, r, W), axis=1)
-            cand = all_sites.sort_values("score", ascending=False).head(1)
-        else:
-            cand = cand.sort_values("score", ascending=False)
-
-        chosen = cand.iloc[0]
-        idx = chosen.name
-        sites_df.at[idx, "capacity_left"] -= 1
-
-        sup_name = chosen.get("שם המדריך", "")
-        supervisor_count[sup_name] = supervisor_count.get(sup_name, 0) + 1
-
-        results.append({
-            "ת\"ז הסטודנט": s["stu_id"],
-            "שם פרטי": s["stu_first"],
-            "שם משפחה": s["stu_last"],
-            "שם מקום ההתמחות": chosen["site_name"],
-            "עיר המוסד": chosen.get("site_city", ""),
-            "תחום ההתמחות במוסד": chosen["site_field"],
-            "שם המדריך": sup_name,
-            "אחוז התאמה": round(chosen["score"], 1)
-        })
-
-    return pd.DataFrame(results)
-
 
 # ---- יצירת XLSX ----
 def df_to_xlsx_bytes(df: pd.DataFrame, sheet_name: str = "שיבוץ") -> bytes:
