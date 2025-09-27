@@ -221,6 +221,11 @@ def resolve_sites(df: pd.DataFrame) -> pd.DataFrame:
     for c in ["site_name","site_field","site_city","שם המדריך"]:
         out[c] = out[c].apply(normalize_text)
     return out
+  
+def norm(x):
+    if pd.isna(x) or x is None:
+        return ""
+    return str(x).strip().lower()
 
 from difflib import SequenceMatcher
 
