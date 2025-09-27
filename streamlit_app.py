@@ -12,7 +12,7 @@ from typing import Optional, Any, List
 # =========================
 st.set_page_config(page_title="מערכת שיבוץ סטודנטים – התאמה חכמה", layout="wide")
 
-
+# ====== CSS – עיצוב מודרני + RTL ======
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Rubik:wght@400;600&display=swap');
@@ -88,47 +88,6 @@ div[data-testid="stDownloadButton"] > button:focus{
 
 .stApp,.main,[data-testid="stSidebar"]{ direction:rtl; text-align:right; }
 label,.stMarkdown,.stText,.stCaption{ text-align:right!important; }
-</style>
-""", unsafe_allow_html=True)
-st.markdown("""
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Assistant:wght@300;400;600;700&family=Noto+Sans+Hebrew:wght@400;600&display=swap" rel="stylesheet">
-
-<style>
-:root { --app-font: 'Assistant', 'Noto Sans Hebrew', 'Segoe UI', -apple-system, sans-serif; }
-
-/* בסיס האפליקציה */
-html, body, .stApp, [data-testid="stAppViewContainer"], .main {
-  font-family: var(--app-font) !important;
-}
-
-/* ודא שכל הצאצאים יורשים את הפונט */
-.stApp * {
-  font-family: var(--app-font) !important;
-}
-
-/* רכיבי קלט/בחירה של Streamlit */
-div[data-baseweb], /* select/radio/checkbox */
-.stTextInput input,
-.stTextArea textarea,
-.stSelectbox div,
-.stMultiSelect div,
-.stRadio,
-.stCheckbox,
-.stButton > button {
-  font-family: var(--app-font) !important;
-}
-
-/* טבלאות DataFrame/Arrow */
-div[data-testid="stDataFrame"] div {
-  font-family: var(--app-font) !important;
-}
-
-/* כותרות */
-h1, h2, h3, h4, h5, h6 {
-  font-family: var(--app-font) !important;
-}
 </style>
 """, unsafe_allow_html=True)
 
@@ -224,50 +183,124 @@ def resolve_sites(df: pd.DataFrame) -> pd.DataFrame:
 
 # ====== חישוב ציון ======
 def compute_score(stu: pd.Series, site: pd.Series, W: Weights) -> float:
-    # ===== תחום התמחות =====
-    stu_field = str(stu.get("stu_pref", "")).strip().lower()
-    site_field = str(site.get("site_field", "")).strip().lower()
-    field_score = 0
+    # ========================
+    # 1. תחום התמחות – 50%
+    # ========================
+    field_match = 0
+    stu_field = str(stu.get("stu_pref", "")).strip()
+    site_field = str(site.get("site_field", "")).strip()
     if stu_field and site_field:
         if stu_field == site_field:
-            field_score = 100
+            field_match = 1.0   # התאמה מלאה
+        elif stu_field in site_field or site_field in stu_field:
+            field_match = 0.7   # התאמה חלקית (אותו תחום כללי)
         else:
-            # נבדוק חפיפה בין מילים
-            stu_words = set(stu_field.split())
-            site_words = set(site_field.split())
-            overlap = len(stu_words & site_words)
-            total = max(len(stu_words), 1)
-            field_score = (overlap / total) * 100  # אחוז חפיפה
+            field_match = 0.0   # אין התאמה
 
-    # ===== בקשות מיוחדות =====
-    stu_req = str(stu.get("stu_req", "")).lower()
-    site_req = str(site.get("בקשות מיוחדות", "")).lower()
-    special_score = 50  # ברירת מחדל ניטרלית
-    if stu_req and stu_req != "אין":
+    # ========================
+    # 2. בקשות מיוחדות – 45%
+    # ========================
+    special_match = 0
+    stu_req = str(stu.get("stu_req", "")).strip()
+    site_req = str(site.get("בקשות מיוחדות", "")).strip()
+
+    if not stu_req or stu_req == "אין":
+        special_match = 0.5   # אין בקשה מיוחדת = ניטרלי
+    else:
         if "קרוב" in stu_req and stu.get("stu_city") == site.get("site_city"):
-            special_score = 100
+            special_match = 1.0
         elif "נגיש" in stu_req and "נגיש" in site_req:
-            special_score = 100
+            special_match = 1.0
         else:
-            special_score = 0
+            special_match = 0.0
 
-    # ===== עיר =====
-    stu_city = str(stu.get("stu_city", "")).strip()
-    site_city = str(site.get("site_city", "")).strip()
-    city_score = 100 if stu_city and site_city and stu_city == site_city else 0
+    # ========================
+    # 3. עיר – 5%
+    # ========================
+    city_match = 0
+    if stu.get("stu_city") and site.get("site_city"):
+        if stu["stu_city"].strip() == site["site_city"].strip():
+            city_match = 1.0
+        else:
+            city_match = 0.0
 
-    # ===== ניקוד סופי =====
+    # ========================
+    # ניקוד סופי
+    # ========================
     score = (
-        W.w_field * field_score +
-        W.w_special * special_score +
-        W.w_city * city_score
+        W.w_field * (field_match * 100) +
+        W.w_special * (special_match * 100) +
+        W.w_city * (city_match * 100)
     )
-
     return round(float(score), 1)
 
+# =========================
+# 1) הוראות שימוש
+# =========================
+st.markdown("## 📘 הוראות שימוש")
+st.markdown("""
+1. **קובץ סטודנטים (CSV/XLSX):** שם פרטי, שם משפחה, תעודת זהות, כתובת/עיר, טלפון, אימייל.  
+   אופציונלי: תחום מועדף, בקשה מיוחדת, בן/בת זוג להכשרה.  
+2. **קובץ אתרים/מדריכים (CSV/XLSX):** מוסד/שירות, תחום התמחות, רחוב, עיר, מספר סטודנטים שניתן לקלוט השנה, מדריך, חוות דעת מדריך.  
+3. **בצע שיבוץ** מחשב *אחוז התאמה* לפי תחום (50%), בקשות מיוחדות (45%), עיר (5%). 
+4. בסוף אפשר להוריד **XLSX**. 
+""")
+
+# =========================
+# 2) דוגמה לשימוש
+# =========================
+st.markdown("## 🧪 דוגמה לשימוש")
+example_students = pd.DataFrame([
+    {"שם פרטי":"רות", "שם משפחה":"כהן", "תעודת זהות":"123456789", "עיר מגורים":"תל אביב", "טלפון":"0501111111", "דוא\"ל":"ruth@example.com", "תחום מועדף":"בריאות הנפש", "בקשה מיוחדת":"קרוב לבית"},
+    {"שם פרטי":"יואב", "שם משפחה":"לוי", "תעודת זהות":"987654321", "עיר מגורים":"חיפה", "טלפון":"0502222222", "דוא\"ל":"yoav@example.com", "תחום מועדף":"רווחה"},
+    {"שם פרטי":"סמאח", "שם משפחה":"ח'ורי", "תעודת זהות":"456789123", "עיר מגורים":"עכו", "טלפון":"0503333333", "דוא\"ל":"sama@example.com", "תחום מועדף":"חינוך מיוחד"},
+])
+example_sites = pd.DataFrame([
+    {"מוסד / שירות הכשרה":"מרכז חוסן תל אביב", "תחום ההתמחות":"בריאות הנפש", "עיר":"תל אביב", "מספר סטודנטים שניתן לקלוט השנה":2, "שם פרטי":"דניאל", "שם משפחה":"כהן", "חוות דעת מדריך":"מדריך מצוין"},
+    {"מוסד / שירות הכשרה":"מחלקת רווחה חיפה", "תחום ההתמחות":"רווחה", "עיר":"חיפה", "מספר סטודנטים שניתן לקלוט השנה":1, "שם פרטי":"מיכל", "שם משפחה":"לוי", "חוות דעת מדריך":"זקוקה לשיפור"},
+    {"מוסד / שירות הכשרה":"בית ספר יד לבנים", "תחום ההתמחות":"חינוך מיוחד", "עיר":"עכו", "מספר סטודנטים שניתן לקלוט השנה":1, "שם פרטי":"שרה", "שם משפחה":"כהן"},
+])
+colX, colY = st.columns(2, gap="large")
+with colX:
+    st.write("**דוגמה – סטודנטים**")
+    st.dataframe(example_students, use_container_width=True)
+with colY:
+    st.write("**דוגמה – אתרי התמחות/מדריכים**")
+    st.dataframe(example_sites, use_container_width=True)
+
+# =========================
+# 3) העלאת קבצים
+# =========================
+st.markdown("## 📤 העלאת קבצים")
+colA, colB = st.columns(2, gap="large")
+
+with colA:
+    students_file = st.file_uploader("קובץ סטודנטים", type=["csv","xlsx","xls"], key="students_file")
+    if students_file is not None:
+        try:
+            st.session_state["df_students_raw"] = read_any(students_file)
+            st.dataframe(st.session_state["df_students_raw"].head(5), use_container_width=True)
+        except Exception as e:
+            st.error(f"לא ניתן לקרוא את קובץ הסטודנטים: {e}")
+
+with colB:
+    sites_file = st.file_uploader("קובץ אתרי התמחות/מדריכים", type=["csv","xlsx","xls"], key="sites_file")
+    if sites_file is not None:
+        try:
+            st.session_state["df_sites_raw"] = read_any(sites_file)
+            st.dataframe(st.session_state["df_sites_raw"].head(5), use_container_width=True)
+        except Exception as e:
+            st.error(f"לא ניתן לקרוא את קובץ האתרים/מדריכים: {e}")
+
+for k in ["df_students_raw","df_sites_raw","result_df","unmatched_students","unused_sites"]:
+    st.session_state.setdefault(k, None)
+
+
+# ====== שיבוץ ======
 # ====== שיבוץ ======
 def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, W: Weights) -> pd.DataFrame:
     results = []
+    # עוקב אחרי כמה סטודנטים שובצו לכל מדריך
     supervisor_count = {}
 
     for _, s in students_df.iterrows():
@@ -285,9 +318,10 @@ def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, W: Weights) 
             })
             continue
 
-        # ✅ חישוב ציון התאמה עם compute_match במקום compute_score
+        # חישוב ציון התאמה לכל מוסד
         cand["score"] = cand.apply(lambda r: compute_score(s, r, W), axis=1)
 
+        # סינון לפי מדריך: מותר עד 2 סטודנטים לכל מדריך
         def allowed_supervisor(r):
             sup = r.get("שם המדריך", "")
             return supervisor_count.get(sup, 0) < 2
@@ -295,6 +329,7 @@ def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, W: Weights) 
         cand = cand[cand.apply(allowed_supervisor, axis=1)]
 
         if cand.empty:
+            # אם אין מדריכים פנויים בתחום – נבחר תחום קרוב (מוסד עם תחום דומה)
             all_sites = sites_df[sites_df["capacity_left"] > 0].copy()
             if all_sites.empty:
                 results.append({
@@ -309,7 +344,7 @@ def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, W: Weights) 
                 })
                 continue
 
-            all_sites["score"] = all_sites.apply(lambda r: compute_match(s, r, W.w_field, W.w_special, W.w_city), axis=1)
+            all_sites["score"] = all_sites.apply(lambda r: compute_score(s, r, W), axis=1)
             cand = all_sites.sort_values("score", ascending=False).head(1)
         else:
             cand = cand.sort_values("score", ascending=False)
@@ -333,6 +368,7 @@ def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, W: Weights) 
         })
 
     return pd.DataFrame(results)
+
 
 # ---- יצירת XLSX ----
 def df_to_xlsx_bytes(df: pd.DataFrame, sheet_name: str = "שיבוץ") -> bytes:
