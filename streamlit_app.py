@@ -251,7 +251,20 @@ for k in ["df_students_raw","df_sites_raw","result_df","unmatched_students","unu
 # =========================
 # ביצוע שיבוץ
 # =========================
+if "result_df" not in st.session_state:
+    st.session_state["result_df"] = None
+
+st.markdown("## ⚙️ ביצוע השיבוץ")
 if st.button("🚀 בצע שיבוץ", use_container_width=True):
+    try:
+        students = resolve_students(st.session_state["df_students_raw"])
+        sites    = resolve_sites(st.session_state["df_sites_raw"])
+        result_df = greedy_match(students, sites, Weights())
+        st.session_state["result_df"] = result_df
+        st.success("השיבוץ הושלם ✓")
+    except Exception as e:
+        st.exception(e)
+
     try:
         students = resolve_students(read_any(students_file))
         sites    = resolve_sites(read_any(sites_file))
