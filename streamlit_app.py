@@ -322,13 +322,29 @@ if st.button("🚀 בצע שיבוץ", use_container_width=True):
         st.success("השיבוץ הושלם ✓")
     except Exception as e:
         st.exception(e)
-
 if isinstance(st.session_state["result_df"], pd.DataFrame) and not st.session_state["result_df"].empty:
     st.markdown("## 📊 תוצאות השיבוץ")
-    st.dataframe(st.session_state["result_df"], use_container_width=True)
 
-    # הורדת תוצאות השיבוץ
-    xlsx_results = df_to_xlsx_bytes(st.session_state["result_df"], sheet_name="תוצאות")
+    # טבלה ראשונה - תוצאות
+    df_show = st.session_state["result_df"].copy()
+
+    # מחיקת עמודת "מדריך" המקורית
+    if "מדריך" in df_show.columns:
+        df_show = df_show.drop(columns=["מדריך"])
+
+    # העברת "תחום ההתמחות במוסד" אחרי "שם מקום ההתמחות"
+    cols = list(df_show.columns)
+    if "תחום ההתמחות במוסד" in cols and "שם מקום ההתמחות" in cols:
+        cols.insert(cols.index("שם מקום ההתמחות")+1, cols.pop(cols.index("תחום ההתמחות במוסד")))
+        df_show = df_show[cols]
+
+    # הוספת טור "שם המדריך" (מתוך הטבלה המקורית)
+    df_show["שם המדריך"] = st.session_state["result_df"]["מדריך"]
+
+    st.dataframe(df_show, use_container_width=True)
+
+    # הורדה ל-Excel
+    xlsx_results = df_to_xlsx_bytes(df_show, sheet_name="תוצאות")
     st.download_button("⬇️ הורדת XLSX – תוצאות השיבוץ", data=xlsx_results,
         file_name="student_site_matching.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
@@ -339,12 +355,19 @@ if isinstance(st.session_state["result_df"], pd.DataFrame) and not st.session_st
         .groupby(["שם מקום ההתמחות","תחום ההתמחות במוסד","מדריך"])
         .agg({
             "ת\"ז הסטודנט":"count",
-            "שם פרטי": lambda x: " + ".join(x.unique())  # רק שמות פרטיים ללא כפילות
+            "שם פרטי": lambda x: list(x),
+            "שם משפחה": lambda x: list(x)
         }).reset_index()
     )
     summary_df.rename(columns={"ת\"ז הסטודנט":"כמה סטודנטים"}, inplace=True)
-    summary_df["המלצת שיבוץ"] = summary_df["שם פרטי"]
 
+    # המלצת שיבוץ - שילוב שם פרטי + שם משפחה
+    summary_df["המלצת שיבוץ"] = summary_df.apply(
+        lambda row: " + ".join([f"{f} {l}" for f, l in zip(row["שם פרטי"], row["שם משפחה"])]),
+        axis=1
+    )
+
+    # סידור עמודות
     summary_df = summary_df[[
         "שם מקום ההתמחות",
         "מדריך",
