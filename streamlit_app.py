@@ -246,6 +246,7 @@ def compute_match(stu, site, w_field=0.5, w_req=0.45, w_city=0.05):
     return round(score, 1)
 
 # ====== שיבוץ ======
+# ====== שיבוץ ======
 def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, W: Weights) -> pd.DataFrame:
     results = []
     supervisor_count = {}
@@ -265,7 +266,7 @@ def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, W: Weights) 
             })
             continue
 
-        # כאן התיקון – שימוש ב-compute_match
+        # ✅ שימוש ב-compute_match במקום compute_score
         cand["score"] = cand.apply(lambda r: compute_match(s, r, W.w_field, W.w_special, W.w_city), axis=1)
 
         # סינון לפי מדריך (עד 2 סטודנטים)
@@ -289,6 +290,8 @@ def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, W: Weights) 
                     "אחוז התאמה": 0
                 })
                 continue
+
+            # ✅ גם כאן compute_match
             all_sites["score"] = all_sites.apply(lambda r: compute_match(s, r, W.w_field, W.w_special, W.w_city), axis=1)
             cand = all_sites.sort_values("score", ascending=False).head(1)
         else:
