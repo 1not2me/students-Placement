@@ -364,10 +364,10 @@ if isinstance(st.session_state["result_df"], pd.DataFrame) and not st.session_st
 
     summary_df = summary_df[[
         "שם מקום ההתמחות",
+        "תחום ההתמחות במוסד",
         "שם המדריך",
         "כמה סטודנטים",
-        "המלצת שיבוץ",
-        "תחום ההתמחות במוסד"
+        "המלצת שיבוץ"
     ]]
 
     st.markdown("### 📝 טבלת סיכום לפי מקום הכשרה")
