@@ -15,7 +15,6 @@ st.set_page_config(page_title="מערכת שיבוץ סטודנטים – התא
 # ====== CSS – עיצוב מודרני + RTL ======
 st.markdown("""
 <style>
-/* טעינת פונט עברי מגוגל (אפשר לשנות ל-Assistant, Heebo, Varela Round וכו') */
 @import url('https://fonts.googleapis.com/css2?family=Rubik:wght@400;600&display=swap');
 
 html, body, [class*="css"] { 
@@ -89,47 +88,6 @@ div[data-testid="stDownloadButton"] > button:focus{
 
 .stApp,.main,[data-testid="stSidebar"]{ direction:rtl; text-align:right; }
 label,.stMarkdown,.stText,.stCaption{ text-align:right!important; }
-</style>
-""", unsafe_allow_html=True)
-st.markdown("""
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Assistant:wght@300;400;600;700&family=Noto+Sans+Hebrew:wght@400;600&display=swap" rel="stylesheet">
-
-<style>
-:root { --app-font: 'Assistant', 'Noto Sans Hebrew', 'Segoe UI', -apple-system, sans-serif; }
-
-/* בסיס האפליקציה */
-html, body, .stApp, [data-testid="stAppViewContainer"], .main {
-  font-family: var(--app-font) !important;
-}
-
-/* ודא שכל הצאצאים יורשים את הפונט */
-.stApp * {
-  font-family: var(--app-font) !important;
-}
-
-/* רכיבי קלט/בחירה של Streamlit */
-div[data-baseweb], /* select/radio/checkbox */
-.stTextInput input,
-.stTextArea textarea,
-.stSelectbox div,
-.stMultiSelect div,
-.stRadio,
-.stCheckbox,
-.stButton > button {
-  font-family: var(--app-font) !important;
-}
-
-/* טבלאות DataFrame/Arrow */
-div[data-testid="stDataFrame"] div {
-  font-family: var(--app-font) !important;
-}
-
-/* כותרות */
-h1, h2, h3, h4, h5, h6 {
-  font-family: var(--app-font) !important;
-}
 </style>
 """, unsafe_allow_html=True)
 
@@ -366,21 +324,27 @@ if st.button("🚀 בצע שיבוץ", use_container_width=True):
         st.exception(e)
 
 if isinstance(st.session_state["result_df"], pd.DataFrame) and not st.session_state["result_df"].empty:
+    st.markdown("## 📊 תוצאות השיבוץ")
+    st.dataframe(st.session_state["result_df"], use_container_width=True)
+
+    # הורדת תוצאות השיבוץ
+    xlsx_results = df_to_xlsx_bytes(st.session_state["result_df"], sheet_name="תוצאות")
+    st.download_button("⬇️ הורדת XLSX – תוצאות השיבוץ", data=xlsx_results,
+        file_name="student_site_matching.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
     # --- טבלת סיכום ---
     summary_df = (
         st.session_state["result_df"]
         .groupby(["שם מקום ההתמחות","תחום ההתמחות במוסד","מדריך"])
         .agg({
             "ת\"ז הסטודנט":"count",
-            "שם פרטי": list,
-            "שם משפחה": list
+            "שם פרטי": lambda x: " + ".join(x.unique())  # רק שמות פרטיים ללא כפילות
         }).reset_index()
     )
     summary_df.rename(columns={"ת\"ז הסטודנט":"כמה סטודנטים"}, inplace=True)
-    summary_df["המלצת שיבוץ"] = summary_df.apply(
-        lambda r: " + ".join([f"{fn} {ln}" for fn, ln in zip(r["שם פרטי"], r["שם משפחה"])]),
-        axis=1
-    )
+    summary_df["המלצת שיבוץ"] = summary_df["שם פרטי"]
+
     summary_df = summary_df[[
         "שם מקום ההתמחות",
         "מדריך",
@@ -389,11 +353,11 @@ if isinstance(st.session_state["result_df"], pd.DataFrame) and not st.session_st
         "תחום ההתמחות במוסד"
     ]]
 
-    st.markdown("## 📊 תוצאות השיבוץ")
+    st.markdown("### 📝 טבלת סיכום לפי מקום הכשרה")
     st.dataframe(summary_df, use_container_width=True)
 
-    # הורדת תוצאות השיבוץ
+    # הורדת טבלת הסיכום
     xlsx_summary = df_to_xlsx_bytes(summary_df, sheet_name="סיכום")
-    st.download_button("⬇️ הורדת XLSX – תוצאות השיבוץ", data=xlsx_summary,
+    st.download_button("⬇️ הורדת XLSX – טבלת סיכום", data=xlsx_summary,
         file_name="student_site_summary.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
