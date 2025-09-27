@@ -321,7 +321,7 @@ def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, W: Weights) 
                 "שם משפחה": s["stu_last"],
                 "שם מקום ההתמחות": chosen["site_name"],
                 "תחום ההתמחות במוסד": chosen["site_field"],
-                "עיר המוסד": chosen.get("site_city","")
+                "עיר המוסד": chosen.get("site_city",""),
                 "שם המדריך": chosen["supervisor"],
                 "אחוז התאמה": round(chosen["score"],1)
             })
