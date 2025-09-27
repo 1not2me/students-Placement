@@ -182,54 +182,57 @@ def resolve_sites(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 # ====== חישוב ציון ======
-def norm(x):
-    if pd.isna(x):
-        return ""
-    return str(x).strip().lower()
+def compute_score(stu: pd.Series, site: pd.Series, W: Weights) -> float:
+    # ========================
+    # 1. תחום התמחות – 50%
+    # ========================
+    field_match = 0
+    stu_field = str(stu.get("stu_pref", "")).strip()
+    site_field = str(site.get("site_field", "")).strip()
+    if stu_field and site_field:
+        if stu_field == site_field:
+            field_match = 1.0   # התאמה מלאה
+        elif stu_field in site_field or site_field in stu_field:
+            field_match = 0.7   # התאמה חלקית (אותו תחום כללי)
+        else:
+            field_match = 0.0   # אין התאמה
 
-# חישוב ניקוד
-def compute_match(stu, site, w_field=0.5, w_req=0.45, w_city=0.05):
-    # תחום התמחות
-    f_score = 100 if norm(stu["תחום מועדף"]) in norm(site["תחום התמחות"]) else 0
+    # ========================
+    # 2. בקשות מיוחדות – 45%
+    # ========================
+    special_match = 0
+    stu_req = str(stu.get("stu_req", "")).strip()
+    site_req = str(site.get("בקשות מיוחדות", "")).strip()
 
-    # בקשה מיוחדת
-    r_score = 0
-    if norm(stu["בקשה מיוחדת"]) and norm(stu["בקשה מיוחדת"]) in norm(site["בקשות מיוחדות"]):
-        r_score = 100
-    elif norm(stu["בקשה מיוחדת"]) == "":
-        r_score = 70   # אין בקשה מיוחדת → ניקוד ביניים
+    if not stu_req or stu_req == "אין":
+        special_match = 0.5   # אין בקשה מיוחדת = ניטרלי
+    else:
+        if "קרוב" in stu_req and stu.get("stu_city") == site.get("site_city"):
+            special_match = 1.0
+        elif "נגיש" in stu_req and "נגיש" in site_req:
+            special_match = 1.0
+        else:
+            special_match = 0.0
 
-    # עיר
-    c_score = 100 if norm(stu["כתובת מלאה (כולל יישוב)"]).find(norm(site["עיר"])) != -1 else 0
+    # ========================
+    # 3. עיר – 5%
+    # ========================
+    city_match = 0
+    if stu.get("stu_city") and site.get("site_city"):
+        if stu["stu_city"].strip() == site["site_city"].strip():
+            city_match = 1.0
+        else:
+            city_match = 0.0
 
-    # משוקלל
-    score = w_field*f_score + w_req*r_score + w_city*c_score
-    return round(score, 1)
-
-# יצירת טבלת שיבוצים
-matches = []
-for i, stu in students.iterrows():
-    best_site = None
-    best_score = -1
-    for j, site in mentors.iterrows():
-        score = compute_match(stu, site)
-        if score > best_score:
-            best_score = score
-            best_site = site
-    matches.append({
-        "תעודת זהות": stu["מספר תעודת זהות"],
-        "שם הסטודנט": f"{stu['שם פרטי']} {stu['שם משפחה']}",
-        "עיר מגורים": stu["כתובת מלאה (כולל יישוב)"],
-        "תחום מועדף": stu["תחום מועדף"],
-        "מוסד מוצע": best_site["שם המוסד"] if best_site is not None else "לא נמצא",
-        "תחום התמחות במוסד": best_site["תחום התמחות"] if best_site is not None else "",
-        "עיר המוסד": best_site["עיר"] if best_site is not None else "",
-        "שם המדריך": f"{best_site['שם פרטי']} {best_site['שם משפחה']}" if best_site is not None else "",
-        "אחוז התאמה": best_score
-    })
-
-result_df = pd.DataFrame(matches)
-
+    # ========================
+    # ניקוד סופי
+    # ========================
+    score = (
+        W.w_field * (field_match * 100) +
+        W.w_special * (special_match * 100) +
+        W.w_city * (city_match * 100)
+    )
+    return round(float(score), 1)
 
 # =========================
 # 1) הוראות שימוש
