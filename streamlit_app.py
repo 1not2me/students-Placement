@@ -246,12 +246,6 @@ with colB:
 
 for k in ["df_students_raw","df_sites_raw","result_df","unmatched_students","unused_sites"]:
     st.session_state.setdefault(k, None)
-# =========================
-# העלאת קבצים
-# =========================
-st.markdown("## 📤 העלאת קבצים")
-students_file = st.file_uploader("קובץ סטודנטים", type=["csv","xlsx","xls"])
-sites_file = st.file_uploader("קובץ אתרי התמחות/מדריכים", type=["csv","xlsx","xls"])
 
 # =========================
 # ביצוע שיבוץ
