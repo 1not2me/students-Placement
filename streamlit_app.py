@@ -223,7 +223,7 @@ def resolve_sites(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 # ====== חישוב ציון ======
-def compute_score(stu: pd.Series, site: pd.Series, W: Weights) -> float:
+def compute_match(stu: pd.Series, site: pd.Series, W: Weights) -> float:
     # ===== תחום התמחות =====
     stu_field = str(stu.get("stu_pref", "")).strip().lower()
     site_field = str(site.get("site_field", "")).strip().lower()
