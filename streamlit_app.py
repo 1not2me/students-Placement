@@ -196,42 +196,51 @@ sites_file = st.file_uploader("קובץ אתרי התמחות/מדריכים", t
 # =========================
 # ביצוע שיבוץ
 # =========================
+# =========================
+# ביצוע שיבוץ
+# =========================
 if st.button("🚀 בצע שיבוץ", use_container_width=True):
-    try:
-        students = resolve_students(read_any(students_file))
-        sites    = resolve_sites(read_any(sites_file))
-        result_df = greedy_match(students, sites, Weights())
+    if not students_file or not sites_file:
+        st.error("❌ יש להעלות גם קובץ סטודנטים וגם קובץ אתרי התמחות לפני ביצוע השיבוץ")
+    else:
+        try:
+            students = resolve_students(read_any(students_file))
+            sites    = resolve_sites(read_any(sites_file))
+            result_df = greedy_match(students, sites, Weights())
 
-        # --- טבלת סיכום בלבד ---
-        summary_df = (
-            result_df
-            .groupby(["שם מקום ההתמחות","תחום ההתמחות במוסד","מדריך"])
-            .agg({
-                "ת\"ז הסטודנט":"count",
-                "שם פרטי": list,
-                "שם משפחה": list
-            }).reset_index()
-        )
-        summary_df["המלצת שיבוץ"] = summary_df.apply(
-            lambda r: " + ".join([f"{fn} {ln}" for fn, ln in zip(r["שם פרטי"], r["שם משפחה"])]),
-            axis=1
-        )
-        summary_df.rename(columns={"ת\"ז הסטודנט":"כמה סטודנטים"}, inplace=True)
-        summary_df = summary_df[[
-            "שם מקום ההתמחות",
-            "מדריך",
-            "כמה סטודנטים",
-            "המלצת שיבוץ",
-            "תחום ההתמחות במוסד"
-        ]]
+            if result_df.empty:
+                st.warning("⚠️ לא נמצאו שיבוצים – בדוק שהקבצים מכילים נתונים מתאימים")
+            else:
+                # --- טבלת סיכום בלבד ---
+                summary_df = (
+                    result_df
+                    .groupby(["שם מקום ההתמחות","תחום ההתמחות במוסד","מדריך"])
+                    .agg({
+                        "ת\"ז הסטודנט":"count",
+                        "שם פרטי": list,
+                        "שם משפחה": list
+                    }).reset_index()
+                )
+                summary_df["המלצת שיבוץ"] = summary_df.apply(
+                    lambda r: " + ".join([f"{fn} {ln}" for fn, ln in zip(r["שם פרטי"], r["שם משפחה"])]),
+                    axis=1
+                )
+                summary_df.rename(columns={"ת\"ז הסטודנט":"כמה סטודנטים"}, inplace=True)
+                summary_df = summary_df[[
+                    "שם מקום ההתמחות",
+                    "מדריך",
+                    "כמה סטודנטים",
+                    "המלצת שיבוץ",
+                    "תחום ההתמחות במוסד"
+                ]]
 
-        st.success("✅ השיבוץ הושלם בהצלחה")
-        st.dataframe(summary_df, use_container_width=True)
+                st.success("✅ השיבוץ הושלם בהצלחה")
+                st.dataframe(summary_df, use_container_width=True)
 
-        # הורדה ל-Excel
-        xlsx_summary = df_to_xlsx_bytes(summary_df, sheet_name="סיכום")
-        st.download_button("⬇️ הורדת XLSX – טבלת סיכום", data=xlsx_summary,
-            file_name="student_site_summary.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-    except Exception as e:
-        st.error(f"שגיאה בשיבוץ: {e}")
+                # הורדה ל-Excel
+                xlsx_summary = df_to_xlsx_bytes(summary_df, sheet_name="סיכום")
+                st.download_button("⬇️ הורדת XLSX – טבלת סיכום", data=xlsx_summary,
+                    file_name="student_site_summary.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        except Exception as e:
+            st.error(f"שגיאה בשיבוץ: {e}")
