@@ -372,8 +372,12 @@ if st.button("🚀 בצע שיבוץ", use_container_width=True):
         st.success("השיבוץ הושלם ✓")
     except Exception as e:
         st.exception(e)
-
 if isinstance(st.session_state["result_df"], pd.DataFrame) and not st.session_state["result_df"].empty:
+    # ודא שכל העמודות קיימות
+    for col in ["שם מקום ההתמחות","תחום ההתמחות במוסד","מדריך"]:
+        if col not in st.session_state["result_df"].columns:
+            st.session_state["result_df"][col] = ""
+
     # --- טבלת סיכום ---
     summary_df = (
         st.session_state["result_df"]
@@ -381,20 +385,27 @@ if isinstance(st.session_state["result_df"], pd.DataFrame) and not st.session_st
         .agg({
             "ת\"ז הסטודנט":"count",
             "שם פרטי": list,
-            "שם משפחה": list
+            "שם משפחה": list,
+            "אחוז התאמה": list
         }).reset_index()
     )
+
     summary_df.rename(columns={"ת\"ז הסטודנט":"כמה סטודנטים"}, inplace=True)
     summary_df["המלצת שיבוץ"] = summary_df.apply(
         lambda r: " + ".join([f"{fn} {ln}" for fn, ln in zip(r["שם פרטי"], r["שם משפחה"])]),
         axis=1
     )
+    summary_df["אחוזי התאמה"] = summary_df["אחוז התאמה"].apply(
+        lambda lst: " + ".join([str(x) for x in lst]) if isinstance(lst, list) else str(lst)
+    )
+
     summary_df = summary_df[[
         "שם מקום ההתמחות",
         "מדריך",
         "כמה סטודנטים",
         "המלצת שיבוץ",
-        "תחום ההתמחות במוסד"
+        "תחום ההתמחות במוסד",
+        "אחוזי התאמה"
     ]]
 
     st.markdown("## 📊 תוצאות השיבוץ")
