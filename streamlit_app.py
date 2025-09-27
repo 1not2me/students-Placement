@@ -254,12 +254,14 @@ for k in ["df_students_raw","df_sites_raw","result_df","unmatched_students","unu
 
 
 # ====== שיבוץ ======
+# ====== שיבוץ ======
 def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, W: Weights) -> pd.DataFrame:
     results = []
+    # עוקב אחרי כמה סטודנטים שובצו לכל מדריך
+    supervisor_count = {}
+
     for _, s in students_df.iterrows():
-        cand = sites_df[sites_df["capacity_left"]>0].copy()
-        cand["score"] = cand.apply(lambda r: compute_score(s, r, W), axis=1)
-        cand = cand.sort_values("score", ascending=False)
+        cand = sites_df[sites_df["capacity_left"] > 0].copy()
         if cand.empty:
             results.append({
                 "ת\"ז הסטודנט": s["stu_id"],
@@ -271,21 +273,59 @@ def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, W: Weights) 
                 "שם המדריך": "",
                 "אחוז התאמה": 0
             })
+            continue
+
+        # חישוב ציון התאמה לכל מוסד
+        cand["score"] = cand.apply(lambda r: compute_score(s, r, W), axis=1)
+
+        # סינון לפי מדריך: מותר עד 2 סטודנטים לכל מדריך
+        def allowed_supervisor(r):
+            sup = r.get("שם המדריך", "")
+            return supervisor_count.get(sup, 0) < 2
+
+        cand = cand[cand.apply(allowed_supervisor, axis=1)]
+
+        if cand.empty:
+            # אם אין מדריכים פנויים בתחום – נבחר תחום קרוב (מוסד עם תחום דומה)
+            all_sites = sites_df[sites_df["capacity_left"] > 0].copy()
+            if all_sites.empty:
+                results.append({
+                    "ת\"ז הסטודנט": s["stu_id"],
+                    "שם פרטי": s["stu_first"],
+                    "שם משפחה": s["stu_last"],
+                    "שם מקום ההתמחות": "לא שובץ",
+                    "עיר המוסד": "",
+                    "תחום ההתמחות במוסד": "",
+                    "שם המדריך": "",
+                    "אחוז התאמה": 0
+                })
+                continue
+
+            all_sites["score"] = all_sites.apply(lambda r: compute_score(s, r, W), axis=1)
+            cand = all_sites.sort_values("score", ascending=False).head(1)
         else:
-            chosen = cand.iloc[0]
-            idx = chosen.name
-            sites_df.at[idx, "capacity_left"] -= 1
-            results.append({
-                "ת\"ז הסטודנט": s["stu_id"],
-                "שם פרטי": s["stu_first"],
-                "שם משפחה": s["stu_last"],
-                "שם מקום ההתמחות": chosen["site_name"],
-                "עיר המוסד": chosen.get("site_city",""),
-                "תחום ההתמחות במוסד": chosen["site_field"],
-                "שם המדריך": chosen["שם המדריך"],
-                "אחוז התאמה": round(chosen["score"],1)
-            })
+            cand = cand.sort_values("score", ascending=False)
+
+        chosen = cand.iloc[0]
+        idx = chosen.name
+        sites_df.at[idx, "capacity_left"] -= 1
+
+        sup_name = chosen.get("שם המדריך", "")
+        supervisor_count[sup_name] = supervisor_count.get(sup_name, 0) + 1
+
+        results.append({
+            "ת\"ז הסטודנט": s["stu_id"],
+            "שם פרטי": s["stu_first"],
+            "שם משפחה": s["stu_last"],
+            "שם מקום ההתמחות": chosen["site_name"],
+            "עיר המוסד": chosen.get("site_city", ""),
+            "תחום ההתמחות במוסד": chosen["site_field"],
+            "שם המדריך": sup_name,
+            "אחוז התאמה": round(chosen["score"], 1)
+        })
+
     return pd.DataFrame(results)
+
 
 # ---- יצירת XLSX ----
 def df_to_xlsx_bytes(df: pd.DataFrame, sheet_name: str = "שיבוץ") -> bytes:
