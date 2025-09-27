@@ -328,18 +328,15 @@ if isinstance(st.session_state["result_df"], pd.DataFrame) and not st.session_st
     # טבלה ראשונה - תוצאות
     df_show = st.session_state["result_df"].copy()
 
-    # מחיקת עמודת "מדריך" המקורית
+    # שינוי שם העמודה "מדריך" ל-"שם המדריך"
     if "מדריך" in df_show.columns:
-        df_show = df_show.drop(columns=["מדריך"])
+        df_show.rename(columns={"מדריך": "שם המדריך"}, inplace=True)
 
     # העברת "תחום ההתמחות במוסד" אחרי "שם מקום ההתמחות"
     cols = list(df_show.columns)
     if "תחום ההתמחות במוסד" in cols and "שם מקום ההתמחות" in cols:
         cols.insert(cols.index("שם מקום ההתמחות")+1, cols.pop(cols.index("תחום ההתמחות במוסד")))
         df_show = df_show[cols]
-
-    # הוספת טור "שם המדריך" (מתוך הטבלה המקורית)
-    df_show["שם המדריך"] = st.session_state["result_df"]["מדריך"]
 
     st.dataframe(df_show, use_container_width=True)
 
@@ -352,11 +349,12 @@ if isinstance(st.session_state["result_df"], pd.DataFrame) and not st.session_st
     # --- טבלת סיכום ---
     summary_df = (
         st.session_state["result_df"]
-        .groupby(["שם מקום ההתמחות","תחום ההתמחות במוסד","מדריך"])
+        .rename(columns={"מדריך": "שם המדריך"})
+        .groupby(["שם מקום ההתמחות","תחום ההתמחות במוסד","שם המדריך"])
         .agg({
             "ת\"ז הסטודנט":"count",
-            "שם פרטי": lambda x: list(x),
-            "שם משפחה": lambda x: list(x)
+            "שם פרטי": list,
+            "שם משפחה": list
         }).reset_index()
     )
     summary_df.rename(columns={"ת\"ז הסטודנט":"כמה סטודנטים"}, inplace=True)
@@ -370,7 +368,7 @@ if isinstance(st.session_state["result_df"], pd.DataFrame) and not st.session_st
     # סידור עמודות
     summary_df = summary_df[[
         "שם מקום ההתמחות",
-        "מדריך",
+        "שם המדריך",
         "כמה סטודנטים",
         "המלצת שיבוץ",
         "תחום ההתמחות במוסד"
