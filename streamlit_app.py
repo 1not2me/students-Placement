@@ -223,7 +223,7 @@ def resolve_sites(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 # ====== חישוב ציון ======
-def compute_match(stu: pd.Series, site: pd.Series, W: Weights) -> float:
+def compute_score(stu: pd.Series, site: pd.Series, W: Weights) -> float:
     # ===== תחום התמחות =====
     stu_field = str(stu.get("stu_pref", "")).strip().lower()
     site_field = str(site.get("site_field", "")).strip().lower()
@@ -286,7 +286,7 @@ def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, W: Weights) 
             continue
 
         # ✅ חישוב ציון התאמה עם compute_match במקום compute_score
-        cand["score"] = cand.apply(lambda r: compute_match(s, r, W.w_field, W.w_special, W.w_city), axis=1)
+        cand["score"] = cand.apply(lambda r: compute_score(s, r, W), axis=1)
 
         def allowed_supervisor(r):
             sup = r.get("שם המדריך", "")
