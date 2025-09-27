@@ -222,25 +222,42 @@ def resolve_sites(df: pd.DataFrame) -> pd.DataFrame:
         out[c] = out[c].apply(normalize_text)
     return out
 
-# ====== חישוב ציון ======
-def norm(x):
-    if pd.isna(x):
-        return ""
-    return str(x).strip().lower()
+from difflib import SequenceMatcher
+
+def similarity(a: str, b: str) -> float:
+    return SequenceMatcher(None, a.lower(), b.lower()).ratio()
 
 def compute_match(stu, site, w_field=0.5, w_req=0.45, w_city=0.05):
     # תחום התמחות
-    f_score = 100 if norm(stu.get("stu_pref")) in norm(site.get("site_field")) else 0
+    stu_field = norm(stu.get("stu_pref"))
+    site_field = norm(site.get("site_field"))
+    f_score = 0
+    if stu_field and site_field:
+        sim = similarity(stu_field, site_field)
+        if sim > 0.85: f_score = 100
+        elif sim > 0.6: f_score = 70
+        elif sim > 0.3: f_score = 40
 
-    # בקשה מיוחדת
+    # בקשות מיוחדות
+    stu_req = norm(stu.get("stu_req"))
+    site_req = norm(site.get("בקשות מיוחדות", ""))
     r_score = 0
-    if norm(stu.get("stu_req")) and norm(stu.get("stu_req")) in norm(site.get("בקשות מיוחדות","")):
-        r_score = 100
-    elif norm(stu.get("stu_req")) == "":
-        r_score = 70
+    if stu_req:
+        sim = similarity(stu_req, site_req)
+        if sim > 0.85: r_score = 100
+        elif sim > 0.5: r_score = 70
+        else: r_score = 20
+    else:
+        r_score = 50  # ניטרלי אם אין בקשה מיוחדת
 
     # עיר
-    c_score = 100 if norm(stu.get("stu_city")) and norm(stu.get("stu_city")) == norm(site.get("site_city")) else 0
+    stu_city = norm(stu.get("stu_city"))
+    site_city = norm(site.get("site_city"))
+    c_score = 0
+    if stu_city and site_city:
+        sim = similarity(stu_city, site_city)
+        if sim > 0.9: c_score = 100
+        elif sim > 0.5: c_score = 70
 
     # משוקלל
     score = w_field*f_score + w_req*r_score + w_city*c_score
