@@ -183,34 +183,53 @@ def resolve_sites(df: pd.DataFrame) -> pd.DataFrame:
 
 # ====== חישוב ציון ======
 def compute_score(stu: pd.Series, site: pd.Series, W: Weights) -> float:
-    # תחום התמחות – חפיפה חלקית או מלאה
-    field_s = 0
+    # --- תחום התמחות ---
+    field_s = 50
     if pd.notna(stu.get("stu_pref")) and pd.notna(site.get("site_field")):
-        if stu["stu_pref"] == site["site_field"]:
+        if stu["stu_pref"].strip() == site["site_field"].strip():
             field_s = 100
-        elif stu["stu_pref"] in site["site_field"]:
+        elif any(word in site["site_field"] for word in stu["stu_pref"].split()):
             field_s = 80
         else:
-            field_s = 50
+            field_s = 60
 
-    # עיר – קרוב/זהה
-    city_s = 0
+    # --- עיר ---
+    city_s = 50
     if pd.notna(stu.get("stu_city")) and pd.notna(site.get("site_city")):
-        if stu["stu_city"] == site["site_city"]:
+        if stu["stu_city"].strip() == site["site_city"].strip():
             city_s = 100
-        elif stu["stu_city"] in site["site_city"]:  # למשל חיפה/קריות
+        elif stu["stu_city"][:3] == site["site_city"][:3]:  # לדוגמה "חיפ" ≈ "חיפה"
             city_s = 80
         else:
             city_s = 60
 
-    # בקשות מיוחדות
+    # --- בקשות מיוחדות ---
     special_s = 70
-    if "קרוב" in str(stu.get("stu_req", "")):
-        special_s = 90 if city_s >= 80 else 75
+    if "קרוב" in str(stu.get("stu_req", "")) and city_s == 100:
+        special_s = 95
+    elif "נגיש" in str(stu.get("stu_req", "")) and "נגיש" in str(site.get("בקשות מיוחדות", "")):
+        special_s = 90
 
-    score = W.w_field*field_s + W.w_city*city_s + W.w_special*special_s
+    # --- ציונים (בונוס) ---
+    bonus = 0
+    try:
+        avg = float(stu.get("stu_avg", 0))
+        if avg >= 90:
+            bonus = 10
+        elif avg >= 80:
+            bonus = 5
+    except:
+        pass
+
+    # --- חישוב ניקוד סופי ---
+    score = (
+        W.w_field * field_s +
+        W.w_city * city_s +
+        W.w_special * special_s +
+        bonus
+    )
+
     return float(np.clip(score, 0, 100))
-
 
 # =========================
 # 1) הוראות שימוש
