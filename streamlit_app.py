@@ -355,3 +355,53 @@ def df_to_xlsx_bytes(df: pd.DataFrame, sheet_name: str = "שיבוץ") -> bytes:
 
     xlsx_io.seek(0)
     return xlsx_io.getvalue()
+  
+# =========================
+# שיבוץ והצגת תוצאות
+# =========================
+if "result_df" not in st.session_state:
+    st.session_state["result_df"] = None
+
+st.markdown("## ⚙️ ביצוע השיבוץ")
+if st.button("🚀 בצע שיבוץ", use_container_width=True):
+    try:
+        students = resolve_students(st.session_state["df_students_raw"])
+        sites    = resolve_sites(st.session_state["df_sites_raw"])
+        result_df = greedy_match(students, sites, Weights())
+        st.session_state["result_df"] = result_df
+        st.success("השיבוץ הושלם ✓")
+    except Exception as e:
+        st.exception(e)
+
+if isinstance(st.session_state["result_df"], pd.DataFrame) and not st.session_state["result_df"].empty:
+    # --- טבלת סיכום ---
+    summary_df = (
+        st.session_state["result_df"]
+        .groupby(["שם מקום ההתמחות","תחום ההתמחות במוסד","מדריך"])
+        .agg({
+            "ת\"ז הסטודנט":"count",
+            "שם פרטי": list,
+            "שם משפחה": list
+        }).reset_index()
+    )
+    summary_df.rename(columns={"ת\"ז הסטודנט":"כמה סטודנטים"}, inplace=True)
+    summary_df["המלצת שיבוץ"] = summary_df.apply(
+        lambda r: " + ".join([f"{fn} {ln}" for fn, ln in zip(r["שם פרטי"], r["שם משפחה"])]),
+        axis=1
+    )
+    summary_df = summary_df[[
+        "שם מקום ההתמחות",
+        "מדריך",
+        "כמה סטודנטים",
+        "המלצת שיבוץ",
+        "תחום ההתמחות במוסד"
+    ]]
+
+    st.markdown("## 📊 תוצאות השיבוץ")
+    st.dataframe(summary_df, use_container_width=True)
+
+    # הורדת תוצאות השיבוץ
+    xlsx_summary = df_to_xlsx_bytes(summary_df, sheet_name="סיכום")
+    st.download_button("⬇️ הורדת XLSX – תוצאות השיבוץ", data=xlsx_summary,
+        file_name="student_site_summary.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
