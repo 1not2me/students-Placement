@@ -1,4 +1,4 @@
-# matcher_streamlit_beauty_rtl_v7_fixed.py
+# matcher_streamlit_beauty_rtl_v7_fixed.py 
 # -*- coding: utf-8 -*-
 import streamlit as st
 import pandas as pd
@@ -366,46 +366,34 @@ if st.button("🚀 בצע שיבוץ", use_container_width=True):
         st.exception(e)
 
 if isinstance(st.session_state["result_df"], pd.DataFrame) and not st.session_state["result_df"].empty:
-    st.markdown("## 📊 תוצאות השיבוץ")
-    st.dataframe(st.session_state["result_df"], use_container_width=True)
-
-    # הורדת תוצאות השיבוץ
-    xlsx_results = df_to_xlsx_bytes(st.session_state["result_df"], sheet_name="תוצאות")
-    st.download_button("⬇️ הורדת XLSX – תוצאות השיבוץ", data=xlsx_results,
-        file_name="student_site_matching.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-
-    # טבלת סיכום
+    # --- טבלת סיכום ---
     summary_df = (
         st.session_state["result_df"]
-        .groupby(["שם מקום ההתמחות","עיר המוסד","תחום ההתמחות במוסד","מדריך"])
+        .groupby(["שם מקום ההתמחות","תחום ההתמחות במוסד","מדריך"])
         .agg({
             "ת\"ז הסטודנט":"count",
-            "שם פרטי": lambda x: " + ".join(x),
-            "שם משפחה": lambda x: " + ".join(x)
+            "שם פרטי": list,
+            "שם משפחה": list
         }).reset_index()
     )
     summary_df.rename(columns={"ת\"ז הסטודנט":"כמה סטודנטים"}, inplace=True)
-    summary_df["המלצת שיבוץ"] = summary_df["שם פרטי"] + " " + summary_df["שם משפחה"]
-    summary_df = summary_df[["שם מקום ההתמחות","תחום ההתמחות במוסד","מדריך","כמה סטודנטים","המלצת שיבוץ"]]
+    summary_df["המלצת שיבוץ"] = summary_df.apply(
+        lambda r: " + ".join([f"{fn} {ln}" for fn, ln in zip(r["שם פרטי"], r["שם משפחה"])]),
+        axis=1
+    )
+    summary_df = summary_df[[
+        "שם מקום ההתמחות",
+        "מדריך",
+        "כמה סטודנטים",
+        "המלצת שיבוץ",
+        "תחום ההתמחות במוסד"
+    ]]
 
-    st.markdown("### 📝 טבלת סיכום לפי מקום הכשרה")
+    st.markdown("## 📊 תוצאות השיבוץ")
     st.dataframe(summary_df, use_container_width=True)
 
-    # הורדת טבלת הסיכום
+    # הורדת תוצאות השיבוץ
     xlsx_summary = df_to_xlsx_bytes(summary_df, sheet_name="סיכום")
-    st.download_button("⬇️ הורדת XLSX – טבלת סיכום", data=xlsx_summary,
+    st.download_button("⬇️ הורדת XLSX – תוצאות השיבוץ", data=xlsx_summary,
         file_name="student_site_summary.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-  
-# --- טבלאות נוספות ---
-if isinstance(st.session_state["unmatched_students"], pd.DataFrame) and not st.session_state["unmatched_students"].empty:
-    st.markdown("### 👩‍🎓 סטודנטים שלא שובצו")
-    st.dataframe(st.session_state["unmatched_students"], use_container_width=True)
-
-if isinstance(st.session_state["unused_sites"], pd.DataFrame) and not st.session_state["unused_sites"].empty:
-    st.markdown("### 🏫 מוסדות שלא שובץ אליהם אף סטודנט")
-    st.dataframe(
-        st.session_state["unused_sites"][["site_name","site_city","site_field","site_capacity"]],
-        use_container_width=True
-    )
