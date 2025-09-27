@@ -183,10 +183,31 @@ def resolve_sites(df: pd.DataFrame) -> pd.DataFrame:
 
 # ====== חישוב ציון ======
 def compute_score(stu: pd.Series, site: pd.Series, W: Weights) -> float:
-    same_city = (stu.get("stu_city") and site.get("site_city") and stu.get("stu_city") == site.get("site_city"))
-    field_s   = 90.0 if stu.get("stu_pref") and stu.get("stu_pref") in site.get("site_field","") else 60.0
-    city_s    = 100.0 if same_city else 65.0
-    special_s = 90.0 if "קרוב" in stu.get("stu_req","") and same_city else 70.0
+    # תחום התמחות – חפיפה חלקית או מלאה
+    field_s = 0
+    if pd.notna(stu.get("stu_pref")) and pd.notna(site.get("site_field")):
+        if stu["stu_pref"] == site["site_field"]:
+            field_s = 100
+        elif stu["stu_pref"] in site["site_field"]:
+            field_s = 80
+        else:
+            field_s = 50
+
+    # עיר – קרוב/זהה
+    city_s = 0
+    if pd.notna(stu.get("stu_city")) and pd.notna(site.get("site_city")):
+        if stu["stu_city"] == site["site_city"]:
+            city_s = 100
+        elif stu["stu_city"] in site["site_city"]:  # למשל חיפה/קריות
+            city_s = 80
+        else:
+            city_s = 60
+
+    # בקשות מיוחדות
+    special_s = 70
+    if "קרוב" in str(stu.get("stu_req", "")):
+        special_s = 90 if city_s >= 80 else 75
+
     score = W.w_field*field_s + W.w_city*city_s + W.w_special*special_s
     return float(np.clip(score, 0, 100))
 
