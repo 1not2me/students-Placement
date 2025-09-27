@@ -183,53 +183,56 @@ def resolve_sites(df: pd.DataFrame) -> pd.DataFrame:
 
 # ====== חישוב ציון ======
 def compute_score(stu: pd.Series, site: pd.Series, W: Weights) -> float:
-    # --- תחום התמחות ---
-    field_s = 50
-    if pd.notna(stu.get("stu_pref")) and pd.notna(site.get("site_field")):
-        if stu["stu_pref"].strip() == site["site_field"].strip():
-            field_s = 100
-        elif any(word in site["site_field"] for word in stu["stu_pref"].split()):
-            field_s = 80
+    # ========================
+    # 1. תחום התמחות – 50%
+    # ========================
+    field_match = 0
+    stu_field = str(stu.get("stu_pref", "")).strip()
+    site_field = str(site.get("site_field", "")).strip()
+    if stu_field and site_field:
+        if stu_field == site_field:
+            field_match = 1.0   # התאמה מלאה
+        elif stu_field in site_field or site_field in stu_field:
+            field_match = 0.7   # התאמה חלקית (אותו תחום כללי)
         else:
-            field_s = 60
+            field_match = 0.0   # אין התאמה
 
-    # --- עיר ---
-    city_s = 50
-    if pd.notna(stu.get("stu_city")) and pd.notna(site.get("site_city")):
+    # ========================
+    # 2. בקשות מיוחדות – 45%
+    # ========================
+    special_match = 0
+    stu_req = str(stu.get("stu_req", "")).strip()
+    site_req = str(site.get("בקשות מיוחדות", "")).strip()
+
+    if not stu_req or stu_req == "אין":
+        special_match = 0.5   # אין בקשה מיוחדת = ניטרלי
+    else:
+        if "קרוב" in stu_req and stu.get("stu_city") == site.get("site_city"):
+            special_match = 1.0
+        elif "נגיש" in stu_req and "נגיש" in site_req:
+            special_match = 1.0
+        else:
+            special_match = 0.0
+
+    # ========================
+    # 3. עיר – 5%
+    # ========================
+    city_match = 0
+    if stu.get("stu_city") and site.get("site_city"):
         if stu["stu_city"].strip() == site["site_city"].strip():
-            city_s = 100
-        elif stu["stu_city"][:3] == site["site_city"][:3]:  # לדוגמה "חיפ" ≈ "חיפה"
-            city_s = 80
+            city_match = 1.0
         else:
-            city_s = 60
+            city_match = 0.0
 
-    # --- בקשות מיוחדות ---
-    special_s = 70
-    if "קרוב" in str(stu.get("stu_req", "")) and city_s == 100:
-        special_s = 95
-    elif "נגיש" in str(stu.get("stu_req", "")) and "נגיש" in str(site.get("בקשות מיוחדות", "")):
-        special_s = 90
-
-    # --- ציונים (בונוס) ---
-    bonus = 0
-    try:
-        avg = float(stu.get("stu_avg", 0))
-        if avg >= 90:
-            bonus = 10
-        elif avg >= 80:
-            bonus = 5
-    except:
-        pass
-
-    # --- חישוב ניקוד סופי ---
+    # ========================
+    # ניקוד סופי
+    # ========================
     score = (
-        W.w_field * field_s +
-        W.w_city * city_s +
-        W.w_special * special_s +
-        bonus
+        W.w_field * (field_match * 100) +
+        W.w_special * (special_match * 100) +
+        W.w_city * (city_match * 100)
     )
-
-    return float(np.clip(score, 0, 100))
+    return round(float(score), 1)
 
 # =========================
 # 1) הוראות שימוש
