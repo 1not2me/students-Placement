@@ -221,52 +221,48 @@ def resolve_sites(df: pd.DataFrame) -> pd.DataFrame:
     for c in ["site_name","site_field","site_city","שם המדריך"]:
         out[c] = out[c].apply(normalize_text)
     return out
-  
-def norm(x):
-    if pd.isna(x) or x is None:
-        return ""
-    return str(x).strip().lower()
-
-from difflib import SequenceMatcher
-
-def similarity(a: str, b: str) -> float:
-    return SequenceMatcher(None, a.lower(), b.lower()).ratio()
-
-def compute_match(stu, site, w_field=0.5, w_req=0.45, w_city=0.05):
-    # תחום התמחות
-    stu_field = norm(stu.get("stu_pref"))
-    site_field = norm(site.get("site_field"))
-    f_score = 0
+ def compute_score(stu: pd.Series, site: pd.Series, W: Weights) -> float:
+    # ===== תחום התמחות =====
+    stu_field = str(stu.get("stu_pref", "")).strip().lower()
+    site_field = str(site.get("site_field", "")).strip().lower()
+    field_score = 0
     if stu_field and site_field:
-        sim = similarity(stu_field, site_field)
-        if sim > 0.85: f_score = 100
-        elif sim > 0.6: f_score = 70
-        elif sim > 0.3: f_score = 40
+        if stu_field == site_field:
+            field_score = 100
+        else:
+            # נבדוק חפיפה בין מילים
+            stu_words = set(stu_field.split())
+            site_words = set(site_field.split())
+            overlap = len(stu_words & site_words)
+            total = max(len(stu_words), 1)
+            field_score = (overlap / total) * 100  # אחוז חפיפה
 
-    # בקשות מיוחדות
-    stu_req = norm(stu.get("stu_req"))
-    site_req = norm(site.get("בקשות מיוחדות", ""))
-    r_score = 0
-    if stu_req:
-        sim = similarity(stu_req, site_req)
-        if sim > 0.85: r_score = 100
-        elif sim > 0.5: r_score = 70
-        else: r_score = 20
-    else:
-        r_score = 50  # ניטרלי אם אין בקשה מיוחדת
+    # ===== בקשות מיוחדות =====
+    stu_req = str(stu.get("stu_req", "")).lower()
+    site_req = str(site.get("בקשות מיוחדות", "")).lower()
+    special_score = 50  # ברירת מחדל ניטרלית
+    if stu_req and stu_req != "אין":
+        if "קרוב" in stu_req and stu.get("stu_city") == site.get("site_city"):
+            special_score = 100
+        elif "נגיש" in stu_req and "נגיש" in site_req:
+            special_score = 100
+        else:
+            special_score = 0
 
-    # עיר
-    stu_city = norm(stu.get("stu_city"))
-    site_city = norm(site.get("site_city"))
-    c_score = 0
-    if stu_city and site_city:
-        sim = similarity(stu_city, site_city)
-        if sim > 0.9: c_score = 100
-        elif sim > 0.5: c_score = 70
+    # ===== עיר =====
+    stu_city = str(stu.get("stu_city", "")).strip()
+    site_city = str(site.get("site_city", "")).strip()
+    city_score = 100 if stu_city and site_city and stu_city == site_city else 0
 
-    # משוקלל
-    score = w_field*f_score + w_req*r_score + w_city*c_score
-    return round(score, 1)
+    # ===== ניקוד סופי =====
+    score = (
+        W.w_field * field_score +
+        W.w_special * special_score +
+        W.w_city * city_score
+    )
+
+    return round(float(score), 1)
+
 
 # ====== שיבוץ ======
 def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, W: Weights) -> pd.DataFrame:
