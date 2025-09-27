@@ -375,37 +375,35 @@ if isinstance(st.session_state["result_df"], pd.DataFrame) and not st.session_st
         file_name="student_site_matching.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
-    # טבלת סיכום
-    summary_df = (
-        st.session_state["result_df"]
-        .groupby(["שם מקום ההתמחות","עיר המוסד","תחום ההתמחות במוסד","מדריך"])
-        .agg({
-            "ת\"ז הסטודנט":"count",
-            "שם פרטי": lambda x: " + ".join(x),
-            "שם משפחה": lambda x: " + ".join(x)
-        }).reset_index()
-    )
-    summary_df.rename(columns={"ת\"ז הסטודנט":"כמה סטודנטים"}, inplace=True)
-    summary_df["המלצת שיבוץ"] = summary_df["שם פרטי"] + " " + summary_df["שם משפחה"]
-    summary_df = summary_df[["שם מקום ההתמחות","תחום ההתמחות במוסד","מדריך","כמה סטודנטים","המלצת שיבוץ"]]
+    # --- טבלת סיכום ---
+summary_df = (
+    st.session_state["result_df"]
+    .groupby(["שם מקום ההתמחות","תחום ההתמחות במוסד","מדריך"])
+    .agg({
+        "ת\"ז הסטודנט":"count",
+        "שם פרטי": lambda x: " + ".join(x),
+        "שם משפחה": lambda x: " + ".join(x)
+    }).reset_index()
+)
 
-    st.markdown("### 📝 טבלת סיכום לפי מקום הכשרה")
-    st.dataframe(summary_df, use_container_width=True)
+# שמות עמודות
+summary_df.rename(columns={"ת\"ז הסטודנט":"כמה סטודנטים"}, inplace=True)
+summary_df["המלצת שיבוץ"] = summary_df["שם פרטי"] + " + " + summary_df["שם משפחה"]
 
-    # הורדת טבלת הסיכום
-    xlsx_summary = df_to_xlsx_bytes(summary_df, sheet_name="סיכום")
-    st.download_button("⬇️ הורדת XLSX – טבלת סיכום", data=xlsx_summary,
-        file_name="student_site_summary.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-  
-# --- טבלאות נוספות ---
-if isinstance(st.session_state["unmatched_students"], pd.DataFrame) and not st.session_state["unmatched_students"].empty:
-    st.markdown("### 👩‍🎓 סטודנטים שלא שובצו")
-    st.dataframe(st.session_state["unmatched_students"], use_container_width=True)
+# סדר העמודות: שירותים (מקום ההכשרה), שם המדריך, כמה סטודנטים, המלצת שיבוץ, תחום
+summary_df = summary_df[[
+    "שם מקום ההתמחות",
+    "מדריך",
+    "כמה סטודנטים",
+    "המלצת שיבוץ",
+    "תחום ההתמחות במוסד"
+]]
 
-if isinstance(st.session_state["unused_sites"], pd.DataFrame) and not st.session_state["unused_sites"].empty:
-    st.markdown("### 🏫 מוסדות שלא שובץ אליהם אף סטודנט")
-    st.dataframe(
-        st.session_state["unused_sites"][["site_name","site_city","site_field","site_capacity"]],
-        use_container_width=True
-    )
+st.markdown("### 📝 טבלת סיכום לפי מקום הכשרה")
+st.dataframe(summary_df, use_container_width=True)
+
+# הורדה ל-Excel
+xlsx_summary = df_to_xlsx_bytes(summary_df, sheet_name="סיכום")
+st.download_button("⬇️ הורדת XLSX – טבלת סיכום", data=xlsx_summary,
+    file_name="student_site_summary.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
