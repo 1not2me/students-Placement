@@ -221,7 +221,9 @@ def resolve_sites(df: pd.DataFrame) -> pd.DataFrame:
     for c in ["site_name","site_field","site_city","שם המדריך"]:
         out[c] = out[c].apply(normalize_text)
     return out
- def compute_score(stu: pd.Series, site: pd.Series, W: Weights) -> float:
+
+# ====== חישוב ציון ======
+def compute_score(stu: pd.Series, site: pd.Series, W: Weights) -> float:
     # ===== תחום התמחות =====
     stu_field = str(stu.get("stu_pref", "")).strip().lower()
     site_field = str(site.get("site_field", "")).strip().lower()
@@ -262,7 +264,6 @@ def resolve_sites(df: pd.DataFrame) -> pd.DataFrame:
     )
 
     return round(float(score), 1)
-
 
 # ====== שיבוץ ======
 def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, W: Weights) -> pd.DataFrame:
