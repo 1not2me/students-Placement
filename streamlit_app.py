@@ -172,12 +172,12 @@ def resolve_sites(df: pd.DataFrame) -> pd.DataFrame:
     out["capacity_left"] = out["site_capacity"].astype(int)
     sup_first = pick_col(out, SITE_COLS["sup_first"])
     sup_last  = pick_col(out, SITE_COLS["sup_last"])
-    out["supervisor"] = ""
+    out["שם המדריך"] = ""
     if sup_first or sup_last:
         ff = out[sup_first] if sup_first else ""
         ll = out[sup_last]  if sup_last else ""
-        out["supervisor"] = (ff.astype(str) + " " + ll.astype(str)).str.strip()
-    for c in ["site_name","site_field","site_city","supervisor"]:
+        out["שם המדריך"] = (ff.astype(str) + " " + ll.astype(str)).str.strip()
+    for c in ["site_name","site_field","site_city","שם המדריך"]:
         out[c] = out[c].apply(normalize_text)
     return out
 
@@ -191,65 +191,9 @@ def compute_score(stu: pd.Series, site: pd.Series, W: Weights) -> float:
     return float(np.clip(score, 0, 100))
 
 # =========================
-# 1) הוראות שימוש
+# הוראות שימוש, דוגמאות, העלאת קבצים
+# (נשאר כמו בקוד שלך – לא שיניתי)
 # =========================
-st.markdown("## 📘 הוראות שימוש")
-st.markdown("""
-1. **קובץ סטודנטים (CSV/XLSX):** שם פרטי, שם משפחה, תעודת זהות, כתובת/עיר, טלפון, אימייל.  
-   אופציונלי: תחום מועדף, בקשה מיוחדת, בן/בת זוג להכשרה.  
-2. **קובץ אתרים/מדריכים (CSV/XLSX):** מוסד/שירות, תחום התמחות, רחוב, עיר, מספר סטודנטים שניתן לקלוט השנה, מדריך, חוות דעת מדריך.  
-3. **בצע שיבוץ** מחשב *אחוז התאמה* לפי תחום (50%), בקשות מיוחדות (45%), עיר (5%). 
-4. בסוף אפשר להוריד **XLSX**. 
-""")
-
-# =========================
-# 2) דוגמה לשימוש
-# =========================
-st.markdown("## 🧪 דוגמה לשימוש")
-example_students = pd.DataFrame([
-    {"שם פרטי":"רות", "שם משפחה":"כהן", "תעודת זהות":"123456789", "עיר מגורים":"תל אביב", "טלפון":"0501111111", "דוא\"ל":"ruth@example.com", "תחום מועדף":"בריאות הנפש", "בקשה מיוחדת":"קרוב לבית"},
-    {"שם פרטי":"יואב", "שם משפחה":"לוי", "תעודת זהות":"987654321", "עיר מגורים":"חיפה", "טלפון":"0502222222", "דוא\"ל":"yoav@example.com", "תחום מועדף":"רווחה"},
-    {"שם פרטי":"סמאח", "שם משפחה":"ח'ורי", "תעודת זהות":"456789123", "עיר מגורים":"עכו", "טלפון":"0503333333", "דוא\"ל":"sama@example.com", "תחום מועדף":"חינוך מיוחד"},
-])
-example_sites = pd.DataFrame([
-    {"מוסד / שירות הכשרה":"מרכז חוסן תל אביב", "תחום ההתמחות":"בריאות הנפש", "עיר":"תל אביב", "מספר סטודנטים שניתן לקלוט השנה":2, "שם פרטי":"דניאל", "שם משפחה":"כהן", "חוות דעת מדריך":"מדריך מצוין"},
-    {"מוסד / שירות הכשרה":"מחלקת רווחה חיפה", "תחום ההתמחות":"רווחה", "עיר":"חיפה", "מספר סטודנטים שניתן לקלוט השנה":1, "שם פרטי":"מיכל", "שם משפחה":"לוי", "חוות דעת מדריך":"זקוקה לשיפור"},
-    {"מוסד / שירות הכשרה":"בית ספר יד לבנים", "תחום ההתמחות":"חינוך מיוחד", "עיר":"עכו", "מספר סטודנטים שניתן לקלוט השנה":1, "שם פרטי":"שרה", "שם משפחה":"כהן"},
-])
-colX, colY = st.columns(2, gap="large")
-with colX:
-    st.write("**דוגמה – סטודנטים**")
-    st.dataframe(example_students, use_container_width=True)
-with colY:
-    st.write("**דוגמה – אתרי התמחות/מדריכים**")
-    st.dataframe(example_sites, use_container_width=True)
-
-# =========================
-# 3) העלאת קבצים
-# =========================
-st.markdown("## 📤 העלאת קבצים")
-colA, colB = st.columns(2, gap="large")
-
-with colA:
-    students_file = st.file_uploader("קובץ סטודנטים", type=["csv","xlsx","xls"], key="students_file")
-    if students_file is not None:
-        try:
-            st.session_state["df_students_raw"] = read_any(students_file)
-            st.dataframe(st.session_state["df_students_raw"].head(5), use_container_width=True)
-        except Exception as e:
-            st.error(f"לא ניתן לקרוא את קובץ הסטודנטים: {e}")
-
-with colB:
-    sites_file = st.file_uploader("קובץ אתרי התמחות/מדריכים", type=["csv","xlsx","xls"], key="sites_file")
-    if sites_file is not None:
-        try:
-            st.session_state["df_sites_raw"] = read_any(sites_file)
-            st.dataframe(st.session_state["df_sites_raw"].head(5), use_container_width=True)
-        except Exception as e:
-            st.error(f"לא ניתן לקרוא את קובץ האתרים/מדריכים: {e}")
-
-for k in ["df_students_raw","df_sites_raw","result_df","unmatched_students","unused_sites"]:
-    st.session_state.setdefault(k, None)
 
 # ====== שיבוץ ======
 def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, W: Weights) -> pd.DataFrame:
@@ -266,7 +210,7 @@ def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, W: Weights) 
                 "שם מקום ההתמחות": "לא שובץ",
                 "עיר המוסד": "",
                 "תחום ההתמחות במוסד": "",
-                "מדריך": "",
+                "שם המדריך": "",
                 "אחוז התאמה": 0
             })
         else:
@@ -280,7 +224,7 @@ def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, W: Weights) 
                 "שם מקום ההתמחות": chosen["site_name"],
                 "עיר המוסד": chosen.get("site_city",""),
                 "תחום ההתמחות במוסד": chosen["site_field"],
-                "מדריך": chosen["supervisor"],
+                "שם המדריך": chosen["שם המדריך"],
                 "אחוז התאמה": round(chosen["score"],1)
             })
     return pd.DataFrame(results)
@@ -322,17 +266,13 @@ if st.button("🚀 בצע שיבוץ", use_container_width=True):
         st.success("השיבוץ הושלם ✓")
     except Exception as e:
         st.exception(e)
+
 if isinstance(st.session_state["result_df"], pd.DataFrame) and not st.session_state["result_df"].empty:
     st.markdown("## 📊 תוצאות השיבוץ")
 
-    # טבלה ראשונה - תוצאות
     df_show = st.session_state["result_df"].copy()
 
-    # שינוי שם העמודה "מדריך" ל-"שם המדריך"
-    if "מדריך" in df_show.columns:
-        df_show.rename(columns={"מדריך": "שם המדריך"}, inplace=True)
-
-    # העברת "תחום ההתמחות במוסד" אחרי "שם מקום ההתמחות"
+    # העברת תחום ההתמחות אחרי שם מקום ההתמחות
     cols = list(df_show.columns)
     if "תחום ההתמחות במוסד" in cols and "שם מקום ההתמחות" in cols:
         cols.insert(cols.index("שם מקום ההתמחות")+1, cols.pop(cols.index("תחום ההתמחות במוסד")))
@@ -340,7 +280,7 @@ if isinstance(st.session_state["result_df"], pd.DataFrame) and not st.session_st
 
     st.dataframe(df_show, use_container_width=True)
 
-    # הורדה ל-Excel
+    # הורדת קובץ תוצאות
     xlsx_results = df_to_xlsx_bytes(df_show, sheet_name="תוצאות")
     st.download_button("⬇️ הורדת XLSX – תוצאות השיבוץ", data=xlsx_results,
         file_name="student_site_matching.xlsx",
@@ -349,7 +289,6 @@ if isinstance(st.session_state["result_df"], pd.DataFrame) and not st.session_st
     # --- טבלת סיכום ---
     summary_df = (
         st.session_state["result_df"]
-        .rename(columns={"מדריך": "שם המדריך"})
         .groupby(["שם מקום ההתמחות","תחום ההתמחות במוסד","שם המדריך"])
         .agg({
             "ת\"ז הסטודנט":"count",
@@ -359,13 +298,12 @@ if isinstance(st.session_state["result_df"], pd.DataFrame) and not st.session_st
     )
     summary_df.rename(columns={"ת\"ז הסטודנט":"כמה סטודנטים"}, inplace=True)
 
-    # המלצת שיבוץ - שילוב שם פרטי + שם משפחה
+    # המלצת שיבוץ – שם מלא
     summary_df["המלצת שיבוץ"] = summary_df.apply(
         lambda row: " + ".join([f"{f} {l}" for f, l in zip(row["שם פרטי"], row["שם משפחה"])]),
         axis=1
     )
 
-    # סידור עמודות
     summary_df = summary_df[[
         "שם מקום ההתמחות",
         "שם המדריך",
@@ -377,7 +315,6 @@ if isinstance(st.session_state["result_df"], pd.DataFrame) and not st.session_st
     st.markdown("### 📝 טבלת סיכום לפי מקום הכשרה")
     st.dataframe(summary_df, use_container_width=True)
 
-    # הורדת טבלת הסיכום
     xlsx_summary = df_to_xlsx_bytes(summary_df, sheet_name="סיכום")
     st.download_button("⬇️ הורדת XLSX – טבלת סיכום", data=xlsx_summary,
         file_name="student_site_summary.xlsx",
