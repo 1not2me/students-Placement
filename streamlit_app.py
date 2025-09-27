@@ -320,80 +320,38 @@ def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, W: Weights) 
                 "שם פרטי": s["stu_first"],
                 "שם משפחה": s["stu_last"],
                 "שם מקום ההתמחות": chosen["site_name"],
-                "עיר המוסד": chosen.get("site_city",""),
                 "תחום ההתמחות במוסד": chosen["site_field"],
-                "מדריך": chosen["supervisor"],
+                "עיר המוסד": chosen.get("site_city","")
+                "שם המדריך": chosen["supervisor"],
                 "אחוז התאמה": round(chosen["score"],1)
             })
     return pd.DataFrame(results)
-
 # ---- יצירת XLSX ----
 def df_to_xlsx_bytes(df: pd.DataFrame, sheet_name: str = "שיבוץ") -> bytes:
     xlsx_io = BytesIO()
     import xlsxwriter
     with pd.ExcelWriter(xlsx_io, engine="xlsxwriter") as writer:
         cols = list(df.columns)
-        has_match_col = "אחוז התאמה" in cols
-        if has_match_col:
-            cols = [c for c in cols if c != "אחוז התאמה"] + ["אחוז התאמה"]
 
-        df[cols].to_excel(writer, index=False, sheet_name=sheet_name)
+        # סדר העמודות: ת"ז, שם פרטי, שם משפחה -> שאר העמודות -> אחוז התאמה (בסוף)
+        ordered_cols = []
+        for c in ["ת\"ז הסטודנט", "שם פרטי", "שם משפחה"]:
+            if c in cols:
+                ordered_cols.append(c)
 
-        if has_match_col:
+        middle_cols = [c for c in cols if c not in ordered_cols and c != "אחוז התאמה"]
+        ordered_cols += middle_cols
+        if "אחוז התאמה" in cols:
+            ordered_cols.append("אחוז התאמה")
+
+        df[ordered_cols].to_excel(writer, index=False, sheet_name=sheet_name)
+
+        if "אחוז התאמה" in ordered_cols:
             workbook  = writer.book
             worksheet = writer.sheets[sheet_name]
             red_fmt = workbook.add_format({"font_color": "red"})
-            col_idx = len(cols) - 1
+            col_idx = ordered_cols.index("אחוז התאמה")
             worksheet.set_column(col_idx, col_idx, 12, red_fmt)
+
     xlsx_io.seek(0)
     return xlsx_io.getvalue()
-
-# =========================
-# שיבוץ והצגת תוצאות
-# =========================
-if "result_df" not in st.session_state:
-    st.session_state["result_df"] = None
-
-st.markdown("## ⚙️ ביצוע השיבוץ")
-if st.button("🚀 בצע שיבוץ", use_container_width=True):
-    try:
-        students = resolve_students(st.session_state["df_students_raw"])
-        sites    = resolve_sites(st.session_state["df_sites_raw"])
-        result_df = greedy_match(students, sites, Weights())
-        st.session_state["result_df"] = result_df
-        st.success("השיבוץ הושלם ✓")
-    except Exception as e:
-        st.exception(e)
-
-if isinstance(st.session_state["result_df"], pd.DataFrame) and not st.session_state["result_df"].empty:
-    # --- טבלת סיכום ---
-    summary_df = (
-        st.session_state["result_df"]
-        .groupby(["שם מקום ההתמחות","תחום ההתמחות במוסד","מדריך"])
-        .agg({
-            "ת\"ז הסטודנט":"count",
-            "שם פרטי": list,
-            "שם משפחה": list
-        }).reset_index()
-    )
-    summary_df.rename(columns={"ת\"ז הסטודנט":"כמה סטודנטים"}, inplace=True)
-    summary_df["המלצת שיבוץ"] = summary_df.apply(
-        lambda r: " + ".join([f"{fn} {ln}" for fn, ln in zip(r["שם פרטי"], r["שם משפחה"])]),
-        axis=1
-    )
-    summary_df = summary_df[[
-        "שם מקום ההתמחות",
-        "מדריך",
-        "כמה סטודנטים",
-        "המלצת שיבוץ",
-        "תחום ההתמחות במוסד"
-    ]]
-
-    st.markdown("## 📊 תוצאות השיבוץ")
-    st.dataframe(summary_df, use_container_width=True)
-
-    # הורדת תוצאות השיבוץ
-    xlsx_summary = df_to_xlsx_bytes(summary_df, sheet_name="סיכום")
-    st.download_button("⬇️ הורדת XLSX – תוצאות השיבוץ", data=xlsx_summary,
-        file_name="student_site_summary.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
