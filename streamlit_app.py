@@ -496,9 +496,13 @@ if "result_df" not in st.session_state:
     st.session_state["result_df"] = None
 
 st.markdown("## ⚙️ ביצוע השיבוץ")
-colM1, colM2 = st.columns([2,1], gap="large")
-with colM1:
-    run_match = st.button("🚀 בצע שיבוץ", use_container_width=True)
+# 3 עמודות – הכפתור באמצע וברוחב מלא
+c_left, c_center, c_right = st.columns([1, 6, 1])
+with c_center:
+    run_match = st.button("🚀 בצע שיבוץ", key="run_match", use_container_width=True)
+
+# ❌ חשוב: אין כפתור נוסף! (מחקי כל st.button נוסף)
+# st.button("🚀 בצע שיבוץ", use_container_width=True)  # להסיר
 
 if run_match:
     try:
@@ -510,6 +514,7 @@ if run_match:
         st.success("השיבוץ הושלם ✓")
     except Exception as e:
         st.exception(e)
+
 
 if isinstance(st.session_state["result_df"], pd.DataFrame) and not st.session_state["result_df"].empty:
     st.markdown("## 📊 תוצאות השיבוץ")
