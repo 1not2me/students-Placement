@@ -183,22 +183,59 @@ def resolve_sites(df: pd.DataFrame) -> pd.DataFrame:
 
 # ====== חישוב ציון ======
 # "אחוז התאמה אמיתי" לפי הנתונים (בינארי לכל מרכיב) ומשקולות: תחום 50%, בקשות מיוחדות 45%, עיר 5%.
+import re
+
+def _norm_he(s: str) -> str:
+    # נירמול בסיסי לעברית: מחרוזת, רווחים, מקפים/מירכאות, ולועזית קטנה
+    s = str(s or "").strip()
+    s = s.replace("״", '"').replace("’","'").replace("–","-").replace("־","-")
+    s = re.sub(r'\s+', ' ', s)
+    return s.casefold()  # כמו lower(), אבל חזק יותר להשוואות
+
+def _tokenize_fields(s: str) -> list:
+    # מפצל תחום באתר למספר ערכים אפשריים
+    s = _norm_he(s)
+    # מפרידים לפי פסיקים/נקודה-פסיק/קו-נטוי/קו
+    parts = re.split(r'[;,/|]| - | – | - |\s+-\s+|\s*\|\s*', s)
+    parts = [p.strip() for p in parts if p.strip()]
+    # אם אין פיצול – נשאיר את כל המחרוזת כטוקן אחד
+    return parts if parts else [s]
+
 def _binary_flags(stu: pd.Series, site: pd.Series):
-    # שליפת שדות כמחרוזות מנורמלות
-    stu_city  = str(stu.get("stu_city")  or "").strip()
-    site_city = str(site.get("site_city") or "").strip()
+    stu_city   = _norm_he(stu.get("stu_city"))
+    site_city  = _norm_he(site.get("site_city"))
+    stu_pref   = _norm_he(stu.get("stu_pref"))
+    site_field = _norm_he(site.get("site_field"))
+    stu_req    = _norm_he(stu.get("stu_req"))
 
-    stu_pref   = str(stu.get("stu_pref")   or "").strip()
-    site_field = str(site.get("site_field") or "").strip()
+    # התאמת עיר – כולל קיצורים בסיסיים
+    city_aliases = {
+        "ת\"א": "תל אביב", "תא": "תל אביב", "תל־אביב": "תל אביב",
+        "י-ם": "ירושלים", "ים": "ירושלים"
+    }
+    stu_city = city_aliases.get(stu_city, stu_city)
+    site_city = city_aliases.get(site_city, site_city)
+    same_city = (stu_city != "") and (site_city != "") and (stu_city == site_city)
 
-    stu_req = str(stu.get("stu_req") or "").strip()
+    # התאמת תחום – השוואה “חכמה”: גם תת-מחרוזת וגם לפי טוקנים
+    field_ok = False
+    if stu_pref:
+        if stu_pref in site_field:
+            field_ok = True
+        else:
+            site_tokens = _tokenize_fields(site_field)
+            # דוגמאות: בריאות הנפש, רווחה, חינוך מיוחד...
+            for t in site_tokens:
+                if (stu_pref in t) or (t in stu_pref):
+                    field_ok = True
+                    break
 
-    # חישובים בוליאניים מפורשים (ללא שימוש ב-and שמחזיר אופֶרַנדים)
-    same_city  = (stu_city != "") and (site_city != "") and (stu_city == site_city)
-    field_ok   = (stu_pref != "") and (stu_pref in site_field)
-    special_ok = ("קרוב" in stu_req) and same_city
+    # “קרוב” – מרחיבים מילים נרדפות
+    near_syns = ["קרוב", "קרוב לבית", "ליד הבית", "בסביבה", "באזור", "סמוך", "קרבה", "קירבה"]
+    special_ok = any(k in stu_req for k in near_syns) and same_city
 
     return int(bool(field_ok)), int(bool(same_city)), int(bool(special_ok))
+
 def compute_score(stu: pd.Series, site: pd.Series, W: Weights) -> float:
     f_ok, c_ok, s_ok = _binary_flags(stu, site)
     score = 100.0 * (W.w_field*f_ok + W.w_city*c_ok + W.w_special*s_ok)
