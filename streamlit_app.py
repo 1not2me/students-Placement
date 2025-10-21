@@ -5,9 +5,9 @@ import pandas as pd
 import numpy as np
 from io import BytesIO
 from dataclasses import dataclass
-from typing import Optional, Any, List, Tuple, Dict
+from typing import Optional, Any, List
 import re
-import unicodedata
+from difflib import SequenceMatcher
 
 # =========================
 # קונפיגורציה כללית
@@ -69,27 +69,24 @@ div[data-testid="stDownloadButton"] > button{
   background:linear-gradient(135deg,var(--primary) 0%,var(--primary-700) 100%)!important;
   color:#fff!important;
   border:none!important;
-  border-radius:24px!important;
-  padding:1.4rem 2.8rem!important;
-  font-size:1.25rem!important;
-  font-weight:700!important;
-  box-shadow:0 10px 22px var(--ring)!important;
+  border-radius:18px!important;
+  padding:1rem 2rem!important;
+  font-size:1.1rem!important;
+  font-weight:600!important;
+  box-shadow:0 8px 18px var(--ring)!important;
   transition:all .15s ease!important;
   width:100% !important;
-  min-height:64px!important;
-  letter-spacing:.3px;
 }
 .stButton > button:hover,
 div[data-testid="stDownloadButton"] > button:hover{ 
-  transform:translateY(-3px) scale(1.03); 
-  filter:brightness(1.09); 
+  transform:translateY(-3px) scale(1.02); 
+  filter:brightness(1.08); 
 }
 .stButton > button:focus,
 div[data-testid="stDownloadButton"] > button:focus{ 
   outline:none!important; 
-  box-shadow:0 0 0 5px var(--ring)!important; 
+  box-shadow:0 0 0 4px var(--ring)!important; 
 }
-
 .stApp,.main,[data-testid="stSidebar"]{ direction:rtl; text-align:right; }
 label,.stMarkdown,.stText,.stCaption{ text-align:right!important; }
 </style>
@@ -102,10 +99,9 @@ st.markdown("<p style='text-align:center;color:#475569;margin-top:-8px;'>כאן 
 # ====== מודל ניקוד ======
 @dataclass
 class Weights:
-    # משקלים חדשים: תחום 60%, גיאוגרפיה 25%, בקשות 15%
-    w_field: float = 0.60
-    w_geo: float = 0.25
-    w_req: float = 0.15
+    w_field: float = 0.50
+    w_city: float = 0.05
+    w_special: float = 0.45
 
 # עמודות סטודנטים
 STU_COLS = {
@@ -149,9 +145,27 @@ def read_any(uploaded) -> pd.DataFrame:
         return pd.read_excel(uploaded)
     return pd.read_csv(uploaded, encoding="utf-8-sig")
 
+# ----- נרמול + עזרי דמיון -----
 def normalize_text(x: Any) -> str:
-    if x is None: return ""
-    return str(x).strip()
+    if x is None: 
+        return ""
+    return str(x).strip().lower()
+
+def _tokenize(s: str) -> list[str]:
+    s = normalize_text(s)
+    return [t for t in re.split(r"[\s,;/|]+", s) if t]
+
+def _sim_ratio(a: str, b: str) -> float:
+    a, b = normalize_text(a), normalize_text(b)
+    if not a or not b:
+        return 0.0
+    return SequenceMatcher(None, a, b).ratio()
+
+def _jaccard(a_tokens: list[str], b_tokens: list[str]) -> float:
+    A, B = set(a_tokens), set(b_tokens)
+    if not A and not B:
+        return 0.0
+    return len(A & B) / max(1, len(A | B))
 
 # ----- סטודנטים -----
 def resolve_students(df: pd.DataFrame) -> pd.DataFrame:
@@ -186,148 +200,71 @@ def resolve_sites(df: pd.DataFrame) -> pd.DataFrame:
         out[c] = out[c].apply(normalize_text)
     return out
 
-# ====== עזר לניקוד אמתי ======
-
-def strip_niqqud(s: str) -> str:
-    s = s or ""
-    return "".join(ch for ch in unicodedata.normalize("NFD", s) if unicodedata.category(ch) != "Mn")
-
-def norm_he(s: str) -> str:
-    s = strip_niqqud(s)
-    s = s.replace("״", '"').replace("'", "").replace("’","")
-    return re.sub(r"[^א-ת0-9A-Za-z ]+", " ", s).lower().strip()
-
-def tokens(s: str) -> List[str]:
-    return [t for t in norm_he(s).split() if t]
-
-# נרדפות/מיפוי תחומים לחישוב דמיון
-FIELD_SYNONYMS: Dict[str, set] = {
-    "בריאות הנפש": {"בריאות", "נפש", "בריאות הנפש", "פסיכיאטר", "פסיכולוגיה", "מרפאה", "חוסן"},
-    "רווחה": {"רווחה", "שירותי רווחה", "קהילה", "מחלקת רווחה"},
-    "מוגבלות": {"מוגבלות", "נכות", "שיקום", "לקויות"},
-    "זקנה": {"זקנה", "אזרחים ותיקים", "קשיש", "גריאטריה"},
-    "ילדים ונוער": {"ילדים", "נוער", "נוערים", "מועדונית", "נוער בסיכון", "חינוך נוער", "נוער/ילדים"},
-    "חינוך מיוחד": {"חינוך", "מיוחד", "חינוך מיוחד", "לקויות למידה"},
-    "בריאות": {"בריאות", "בית חולים", "מרפאה", "קהילה בריאות"},
-    "משפחה": {"משפחה", "רווחת המשפחה", "שירותי משפחה"},
-    "נשים": {"נשים", "מקלט לנשים"},
-    "קהילה": {"קהילה", "מרכז קהילתי"}
-}
-
-REGION_MAP: Dict[str, str] = {
-    # גוש דן/מרכז
-    "תל אביב": "מרכז", "רמת גן": "מרכז", "גבעתיים": "מרכז", "בת ים": "מרכז", "חולון": "מרכז",
-    "פ״ת": "מרכז", "פתח תקווה": "מרכז", "רמת השרון": "מרכז", "הרצליה": "מרכז", "כפר סבא": "שרון", "רעננה": "שרון",
-    "נתניה": "שרון", "חדרה": "שרון", "רמלה": "מרכז", "לוד": "מרכז", "רחובות": "מרכז", "אשדוד": "דרום", "אשקלון": "דרום",
-    # צפון/חיפה/גליל
-    "חיפה": "חיפה", "קריית חיים": "חיפה", "קריית אתא": "חיפה", "קריית מוצקין": "חיפה", "קריית ביאליק": "חיפה",
-    "נהריה": "צפון", " עכו": "צפון", "עכו": "צפון", "כרמיאל": "צפון", "צפת": "צפון", "טבריה": "צפון", "קריית שמונה": "צפון",
-    # ירושלים
-    "ירושלים": "ירושלים", "בית שמש": "ירושלים",
-    # דרום
-    "באר שבע": "דרום", "דימונה": "דרום"
-}
-
-REQ_KEYWORDS = {
-    "קרוב": {"קרוב", "ליד הבית", "קרבה", "מרחק קצר"},
-    "בית חולים": {"בית חולים", "מרכז רפואי", "בי\"ח", "ביהח"},
-    "ילדים/נוער": {"ילדים", "נוער", "נוער בסיכון", "מועדונית"},
-    "בוקר": {"בוקר", "שעות בוקר", "08", "9:00"},
-}
-
-def field_similarity(stu_pref: str, site_field: str) -> float:
+# ====== ניקוד – גרסה מדורגת ומבדילה ======
+def _field_score(stu_pref: str, site_field: str) -> float:
     if not stu_pref or not site_field:
-        return 0.0
-    stu_toks = set(tokens(stu_pref))
-    site_toks = set(tokens(site_field))
+        return 50.0
+    prefs = _tokenize(stu_pref)
+    site_tokens = _tokenize(site_field)
+    max_sim = 0.0
+    for p in prefs:
+        max_sim = max(max_sim, _sim_ratio(p, site_field), _jaccard([p], site_tokens))
+    if max_sim >= 0.90: return 98.0
+    if max_sim >= 0.75: return 90.0
+    if max_sim >= 0.60: return 80.0
+    if max_sim >= 0.45: return 70.0
+    return 55.0
 
-    # הרחבת נרדפות: אם מופיע מונח כללי – תן בונוס
-    def expand(tset: set) -> set:
-        out = set(tset)
-        for canon, syns in FIELD_SYNONYMS.items():
-            if (set(tokens(canon)) & tset) or (syns & tset):
-                out |= syns | set(tokens(canon))
-        return out
-
-    stu_exp  = expand(stu_toks)
-    site_exp = expand(site_toks)
-
-    inter = len(stu_exp & site_exp)
-    uni   = len(stu_exp | site_exp) or 1
-    jacc  = inter / uni
-    # בונוס להתאמה מאוד חזקה כשהטקסטים זהים/מכילים זה את זה
-    if stu_toks and stu_toks.issubset(site_exp):
-        jacc = max(jacc, 0.85)
-    return float(np.clip(jacc, 0.0, 1.0))
-
-def city_region(city: str) -> str:
-    c = (city or "").strip()
-    if c in REGION_MAP:
-        return REGION_MAP[c]
-    # נסה לנרמל בלי ניקוד ורווחים כפולים
-    c2 = norm_he(c)
-    for k in list(REGION_MAP.keys()):
-        if norm_he(k) == c2:
-            return REGION_MAP[k]
-    return ""
-
-def geo_similarity(stu_city: str, site_city: str) -> float:
+def _city_score(stu_city: str, site_city: str) -> float:
+    stu_city, site_city = normalize_text(stu_city), normalize_text(site_city)
     if not stu_city or not site_city:
-        return 0.5
-    if norm_he(stu_city) == norm_he(site_city):
-        return 1.0
-    r1, r2 = city_region(stu_city), city_region(site_city)
-    if r1 and r1 == r2:
-        return 0.8
-    return 0.4
+        return 60.0
+    if stu_city == site_city:
+        return 100.0
+    sim = _sim_ratio(stu_city, site_city)
+    if sim >= 0.85: return 92.0
+    if sim >= 0.70: return 85.0
+    if sim >= 0.50: return 75.0
+    return 65.0
 
-def special_alignment(stu_req: str, site_name: str, site_field: str, same_city: bool) -> float:
-    if not stu_req:
-        return 0.6  # נייטרלי
-    req_toks = set(tokens(stu_req))
-    name_toks = set(tokens(site_name or "")) | set(tokens(site_field or ""))
+def _special_score(req: str, stu_city: str, site_city: str, site_name: str) -> float:
+    base = 55.0
+    txt = normalize_text(req)
+    same_city = normalize_text(stu_city) and normalize_text(site_city) and normalize_text(stu_city) == normalize_text(site_city)
+    if "קרוב" in txt and same_city:
+        base = 92.0
+    if site_name and normalize_text(site_name) in txt:
+        base = min(100.0, base + 6.0)
+    if site_city and normalize_text(site_city) in txt:
+        base = min(100.0, base + 6.0)
+    if "לא" in txt and ("רחוק" in txt or "לא בעיר" in txt):
+        base = max(35.0, base - 12.0)
+    return base
 
-    score = 0.6  # בסיס
-    # קרבה פיזית
-    if (REQ_KEYWORDS["קרוב"] & req_toks):
-        score = max(score, 1.0 if same_city else 0.65)
-    # בית חולים
-    if (REQ_KEYWORDS["בית חולים"] & req_toks) and ("בית" in name_toks and "חולים" in name_toks or "מרכז" in name_toks and "רפואי" in name_toks):
-        score = max(score, 0.95)
-    # ילדים/נוער
-    if (REQ_KEYWORDS["ילדים/נוער"] & req_toks) and ({"ילדים","נוער"} & name_toks):
-        score = max(score, 0.9)
-    # בוקר (אין נתון שעות בקובץ – נשאר כרמז קל)
-    if (REQ_KEYWORDS["בוקר"] & req_toks):
-        score = max(score, 0.7)
+def compute_score_with_explain(stu: pd.Series, site: pd.Series, W: Weights):
+    pref   = stu.get("stu_pref", "")
+    sfield = site.get("site_field", "")
+    scity  = site.get("site_city", "")
+    scname = site.get("site_name", "")
+    cty    = stu.get("stu_city", "")
+    req    = stu.get("stu_req", "")
 
-    return float(np.clip(score, 0.4, 1.0))
-
-# ====== חישוב ציון ======
-def compute_score(stu: pd.Series, site: pd.Series, W: Weights) -> float:
-    f_sim = field_similarity(stu.get("stu_pref",""), site.get("site_field",""))         # 0..1
-    g_sim = geo_similarity(stu.get("stu_city",""), site.get("site_city",""))            # 0..1
-    same_city = norm_he(stu.get("stu_city","")) == norm_he(site.get("site_city",""))
-    r_sim = special_alignment(stu.get("stu_req",""), site.get("site_name",""), site.get("site_field",""), same_city)  # 0..1
-
-    score = 100.0 * (W.w_field*f_sim + W.w_geo*g_sim + W.w_req*r_sim)
-    return float(np.clip(round(score), 0, 100))
-
-# --- גרסה עם פירוט מרכיבים (לשבירת הציון) ---
-def compute_score_with_explain(stu: pd.Series, site: pd.Series, W: Weights) -> Tuple[int, Dict[str,int]]:
-    f_sim = field_similarity(stu.get("stu_pref",""), site.get("site_field",""))
-    g_sim = geo_similarity(stu.get("stu_city",""), site.get("site_city",""))
-    same_city = norm_he(stu.get("stu_city","")) == norm_he(site.get("site_city",""))
-    r_sim = special_alignment(stu.get("stu_req",""), site.get("site_name",""), site.get("site_field",""), same_city)
+    field_s   = _field_score(pref, sfield)
+    city_s    = _city_score(cty, scity)
+    special_s = _special_score(req, cty, scity, scname)
 
     parts = {
-        "התאמת תחום": int(round(100 * W.w_field * f_sim)),
-        "מרחק/גיאוגרפיה": int(round(100 * W.w_geo * g_sim)),
-        "בקשות מיוחדות": int(round(100 * W.w_req * r_sim)),
+        "התאמת תחום": round(Weights.w_field * field_s),
+        "מרחק/גיאוגרפיה": round(Weights.w_city * city_s),
+        "בקשות מיוחדות": round(Weights.w_special * special_s),
         "עדיפויות הסטודנט/ית": 0
     }
-    total = int(np.clip(sum(parts.values()), 0, 100))
-    return total, parts
+    score = int(np.clip(sum(parts.values()), 0, 100))
+    return score, parts
+
+def compute_score(stu: pd.Series, site: pd.Series, W: Weights) -> float:
+    sc, _ = compute_score_with_explain(stu, site, W)
+    return float(sc)
 
 # =========================
 # 1) הוראות שימוש
@@ -337,7 +274,7 @@ st.markdown("""
 1. **קובץ סטודנטים (CSV/XLSX):** שם פרטי, שם משפחה, תעודת זהות, כתובת/עיר, טלפון, אימייל.  
    אופציונלי: תחום מועדף, בקשה מיוחדת, בן/בת זוג להכשרה.  
 2. **קובץ אתרים/מדריכים (CSV/XLSX):** מוסד/שירות, תחום התמחות, רחוב, עיר, מספר סטודנטים שניתן לקלוט השנה, מדריך, חוות דעת מדריך.  
-3. **בצע שיבוץ** מחשב *אחוז התאמה* לפי תחום (60%), גיאוגרפיה (25%), בקשות מיוחדות (15%). 
+3. **בצע שיבוץ** מחשב *אחוז התאמה* לפי תחום (50%), בקשות מיוחדות (45%), עיר (5%). 
 4. בסוף אפשר להוריד **XLSX**. 
 """)
 
@@ -411,6 +348,7 @@ def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, W: Weights) 
             })
             continue
 
+        # חישוב ציון + פירוק רכיבים
         cand[["score","_parts"]] = cand.apply(
             lambda r: pd.Series(compute_score_with_explain(s, r, W)),
             axis=1
@@ -496,13 +434,9 @@ if "result_df" not in st.session_state:
     st.session_state["result_df"] = None
 
 st.markdown("## ⚙️ ביצוע השיבוץ")
-# 3 עמודות – הכפתור באמצע וברוחב מלא
-c_left, c_center, c_right = st.columns([1, 6, 1])
-with c_center:
-    run_match = st.button("🚀 בצע שיבוץ", key="run_match", use_container_width=True)
-
-# ❌ חשוב: אין כפתור נוסף! (מחקי כל st.button נוסף)
-# st.button("🚀 בצע שיבוץ", use_container_width=True)  # להסיר
+colM1, colM2, colM3 = st.columns([1,2,1], gap="large")
+with colM2:
+    run_match = st.button("🚀 בצע שיבוץ", use_container_width=True)
 
 if run_match:
     try:
@@ -515,13 +449,12 @@ if run_match:
     except Exception as e:
         st.exception(e)
 
-
 if isinstance(st.session_state["result_df"], pd.DataFrame) and not st.session_state["result_df"].empty:
     st.markdown("## 📊 תוצאות השיבוץ")
 
     base_df = st.session_state["result_df"].copy()
 
-    # טבלת התוצאות המרכזית (לפי המרצים)
+    # ---- טבלת תוצאות מרכזית ----
     df_show = pd.DataFrame({
         "אחוז התאמה": base_df["אחוז התאמה"].astype(int),
         "שם הסטודנט/ית": (base_df["שם פרטי"].astype(str) + " " + base_df["שם משפחה"].astype(str)).str.strip(),
@@ -556,7 +489,7 @@ if isinstance(st.session_state["result_df"], pd.DataFrame) and not st.session_st
     except Exception:
         st.info("אין נתוני הסבר לציון עבור השורה שנבחרה.")
 
-    # --- טבלת סיכום לפי מקום הכשרה ---
+    # --- סיכום לפי מקום הכשרה ---
     st.markdown("### 📝 טבלת סיכום לפי מקום הכשרה")
     summary_df = (
         base_df
@@ -579,8 +512,8 @@ if isinstance(st.session_state["result_df"], pd.DataFrame) and not st.session_st
         "כמה סטודנטים",
         "המלצת שיבוץ"
     ]].rename(columns={"שם miejsce ההתמחות".replace("miejsce","מקום"): "שם מקום ההתמחות"})
-    st.dataframe(summary_df, use_container_width=True)
 
+    st.dataframe(summary_df, use_container_width=True)
     xlsx_summary = df_to_xlsx_bytes(summary_df, sheet_name="סיכום")
     st.download_button("⬇️ הורדת XLSX – טבלת סיכום", data=xlsx_summary,
         file_name="student_site_summary.xlsx",
@@ -613,7 +546,7 @@ if isinstance(st.session_state["result_df"], pd.DataFrame) and not st.session_st
     else:
         st.info("לא נמצאו נתוני קיבולת לשיבוץ זה.")
 
-    # --- דוח ריכוזי פר־מורה ---
+    # --- דוח פר־מורה ---
     st.markdown("### 👩‍🏫 דוח פר־מורה שיטות")
     teachers_list = ["(כולם)"] + sorted([x for x in base_df["שם המדריך"].unique() if str(x).strip() != ""])
     pick_teacher = st.selectbox("סינון לפי מורה:", teachers_list, index=0)
