@@ -379,8 +379,6 @@ st.markdown("## ⚙️ ביצוע השיבוץ")
 colM1, colM2 = st.columns([2,1], gap="large")
 with colM1:
     run_match = st.button("🚀 בצע שיבוץ", use_container_width=True)
-with colM2:
-    MATCH_THRESHOLD = st.slider("סף התאמה (אחוזים) – מתחת לסף: בדיקה ידנית", min_value=0, max_value=100, value=70, step=1)
 
 if run_match:
     try:
