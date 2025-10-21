@@ -1,54 +1,22 @@
-# matcher_streamlit_beauty_rtl_v7_fixed.py 
+# matcher_streamlit_beauty_rtl_v7_fixed.py
 # -*- coding: utf-8 -*-
 import streamlit as st
 import pandas as pd
 import numpy as np
 from io import BytesIO
 from dataclasses import dataclass
-from typing import Optional, Any, List
+from typing import Optional, Any, List, Dict
 import re
-from difflib import SequenceMatcher
-# --- Hadasim CLM font embed (must be before any CSS that sets font-family)
-import base64, os
-from pathlib import Path
-
-def inject_hadasim_font():
-    font_path = Path("fonts/HadasimCLM-Regular.woff2")
-    if font_path.exists():
-        b64 = base64.b64encode(font_path.read_bytes()).decode("utf-8")
-        st.markdown(f"""
-        <style>
-        @font-face{{
-          font-family: 'HadasimCLM';
-          src: url(data:font/woff2;base64,{b64}) format('woff2');
-          font-weight: 400;
-          font-style: normal;
-          font-display: swap;
-        }}
-        :root {{ --app-font: 'HadasimCLM', 'Rubik', 'David', sans-serif; }}
-        html, body, .stApp, [data-testid="stAppViewContainer"], .main {{ font-family: var(--app-font) !important; }}
-        .stApp * {{ font-family: var(--app-font) !important; }}
-        </style>
-        """, unsafe_allow_html=True)
-    else:
-        st.warning("לא נמצא fonts/HadasimCLM-Regular.woff2 — נטען פונט ברירת-מחדל.")
-
-inject_hadasim_font()
 
 # =========================
 # קונפיגורציה כללית
 # =========================
 st.set_page_config(page_title="מערכת שיבוץ סטודנטים – התאמה חכמה", layout="wide")
 
-# ====== CSS – עיצוב מודרני + RTL ======
+# ====== CSS – עיצוב מודרני + RTL + גופן David ======
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Rubik:wght@400;600&display=swap');
-
-html, body, [class*="css"] { 
-  font-family: 'Rubik', 'David', sans-serif !important; 
-}
-
+/* נשתמש בגופן David אם קיים במערכת; אחרת ניפול לקלאסיים */
 :root{
   --bg-1:#e0f7fa;
   --bg-2:#ede7f6;
@@ -59,6 +27,10 @@ html, body, [class*="css"] {
   --primary:#9b5de5;
   --primary-700:#f15bb5;
   --ring:rgba(155,93,229,.35);
+}
+
+html, body, [class*="css"], .stApp, .main, [data-testid="stSidebar"]{
+  font-family: "David", "Noto Sans Hebrew", "Segoe UI", system-ui, sans-serif !important;
 }
 
 [data-testid="stAppViewContainer"]{
@@ -90,31 +62,24 @@ h1,h2,h3,.stMarkdown h1,.stMarkdown h2{
   margin-bottom:1rem;
 }
 
-.stButton > button,
-div[data-testid="stDownloadButton"] > button{
-  background:linear-gradient(135deg,var(--primary) 0%,var(--primary-700) 100%)!important;
-  color:#fff!important;
-  border:none!important;
-  border-radius:18px!important;
-  padding:1rem 2rem!important;
-  font-size:1.1rem!important;
-  font-weight:600!important;
-  box-shadow:0 8px 18px var(--ring)!important;
-  transition:all .15s ease!important;
-  width:100% !important;
-}
-.stButton > button:hover,
-div[data-testid="stDownloadButton"] > button:hover{ 
-  transform:translateY(-3px) scale(1.02); 
-  filter:brightness(1.08); 
-}
-.stButton > button:focus,
-div[data-testid="stDownloadButton"] > button:focus{ 
-  outline:none!important; 
-  box-shadow:0 0 0 4px var(--ring)!important; 
-}
 .stApp,.main,[data-testid="stSidebar"]{ direction:rtl; text-align:right; }
 label,.stMarkdown,.stText,.stCaption{ text-align:right!important; }
+
+/* כפתור ראשי – גדול ורחב */
+.cta-wrap > div > button{
+  background:linear-gradient(90deg,var(--primary) 0%,var(--primary-700) 100%)!important;
+  color:#fff!important;
+  border:none!important;
+  border-radius:24px!important;
+  padding:1.4rem 2rem!important;
+  font-size:1.25rem!important;
+  font-weight:700!important;
+  box-shadow:0 10px 22px var(--ring)!important;
+  transition:all .15s ease!important;
+  width:100%!important;
+}
+.cta-wrap > div > button:hover{ transform:translateY(-3px) scale(1.02); filter:brightness(1.07); }
+.cta-wrap > div > button:focus{ outline:none!important; box-shadow:0 0 0 4px var(--ring)!important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -125,9 +90,10 @@ st.markdown("<p style='text-align:center;color:#475569;margin-top:-8px;'>כאן 
 # ====== מודל ניקוד ======
 @dataclass
 class Weights:
-    w_field: float = 0.50
-    w_city: float = 0.05
-    w_special: float = 0.45
+    # משקלים – מייצרים שונות אמיתית בין מועמדים
+    w_field: float   = 0.55   # תחום
+    w_city: float    = 0.25   # עיר/אזור
+    w_special: float = 0.20   # בקשות מיוחדות
 
 # עמודות סטודנטים
 STU_COLS = {
@@ -171,39 +137,28 @@ def read_any(uploaded) -> pd.DataFrame:
         return pd.read_excel(uploaded)
     return pd.read_csv(uploaded, encoding="utf-8-sig")
 
-# ----- נרמול + עזרי דמיון -----
 def normalize_text(x: Any) -> str:
-    if x is None: 
-        return ""
-    return str(x).strip().lower()
-
-def _tokenize(s: str) -> list[str]:
-    s = normalize_text(s)
-    return [t for t in re.split(r"[\s,;/|]+", s) if t]
-
-def _sim_ratio(a: str, b: str) -> float:
-    a, b = normalize_text(a), normalize_text(b)
-    if not a or not b:
-        return 0.0
-    return SequenceMatcher(None, a, b).ratio()
-
-def _jaccard(a_tokens: list[str], b_tokens: list[str]) -> float:
-    A, B = set(a_tokens), set(b_tokens)
-    if not A and not B:
-        return 0.0
-    return len(A & B) / max(1, len(A | B))
+    return (str(x or "")).strip()
 
 # ----- סטודנטים -----
 def resolve_students(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
-    out["stu_id"] = out[pick_col(out, STU_COLS["id"])]
+    out["stu_id"]    = out[pick_col(out, STU_COLS["id"])]
     out["stu_first"] = out[pick_col(out, STU_COLS["first"])]
     out["stu_last"]  = out[pick_col(out, STU_COLS["last"])]
-    out["stu_city"]  = out[pick_col(out, STU_COLS["city"])] if pick_col(out, STU_COLS["city"]) else ""
-    out["stu_pref"]  = out[pick_col(out, STU_COLS["preferred_field"])] if pick_col(out, STU_COLS["preferred_field"]) else ""
-    out["stu_req"]   = out[pick_col(out, STU_COLS["special_req"])] if pick_col(out, STU_COLS["special_req"]) else ""
+
+    city_col = pick_col(out, STU_COLS["city"]) or pick_col(out, STU_COLS["address"])
+    out["stu_city"]  = out[city_col] if city_col else ""
+
+    # תחום מועדף/ים
+    pref_col = pick_col(out, ["תחומים מועדפים"]) or pick_col(out, STU_COLS["preferred_field"])
+    out["stu_pref"] = out[pref_col] if pref_col else ""
+
+    out["stu_req"]  = out[pick_col(out, STU_COLS["special_req"])] if pick_col(out, STU_COLS["special_req"]) else ""
+
     for c in ["stu_id","stu_first","stu_last","stu_city","stu_pref","stu_req"]:
         out[c] = out[c].apply(normalize_text)
+
     return out
 
 # ----- אתרים -----
@@ -212,9 +167,11 @@ def resolve_sites(df: pd.DataFrame) -> pd.DataFrame:
     out["site_name"]  = out[pick_col(out, SITE_COLS["name"])]
     out["site_field"] = out[pick_col(out, SITE_COLS["field"])]
     out["site_city"]  = out[pick_col(out, SITE_COLS["city"])]
+
     cap_col = pick_col(out, SITE_COLS["capacity"])
     out["site_capacity"] = pd.to_numeric(out[cap_col], errors="coerce").fillna(1).astype(int) if cap_col else 1
     out["capacity_left"] = out["site_capacity"].astype(int)
+
     sup_first = pick_col(out, SITE_COLS["sup_first"])
     sup_last  = pick_col(out, SITE_COLS["sup_last"])
     out["שם המדריך"] = ""
@@ -222,86 +179,109 @@ def resolve_sites(df: pd.DataFrame) -> pd.DataFrame:
         ff = out[sup_first] if sup_first else ""
         ll = out[sup_last]  if sup_last else ""
         out["שם המדריך"] = (ff.astype(str) + " " + ll.astype(str)).str.strip()
+
     for c in ["site_name","site_field","site_city","שם המדריך"]:
         out[c] = out[c].apply(normalize_text)
     return out
 
-# ====== ניקוד – גרסה מדורגת ומבדילה ======
-def _field_score(stu_pref: str, site_field: str) -> float:
-    if not stu_pref or not site_field:
-        return 50.0
-    prefs = _tokenize(stu_pref)
-    site_tokens = _tokenize(site_field)
-    max_sim = 0.0
-    for p in prefs:
-        max_sim = max(max_sim, _sim_ratio(p, site_field), _jaccard([p], site_tokens))
-    if max_sim >= 0.90: return 98.0
-    if max_sim >= 0.75: return 90.0
-    if max_sim >= 0.60: return 80.0
-    if max_sim >= 0.45: return 70.0
-    return 55.0
+# ====== עזר לניקוד ======
+CITY_REGION: Dict[str, str] = {
+    "תל אביב": "מרכז", "רמת גן": "מרכז", "גבעתיים": "מרכז",
+    "פתח תקווה": "מרכז", "ראשון לציון": "מרכז", "נתניה": "שרון",
+    "רעננה": "שרון", "כפר סבא": "שרון",
+    "חיפה": "צפון", "קריות": "צפון", "נהריה": "צפון", "עכו": "צפון", "צפת": "צפון", "טבריה": "צפון",
+    "אשדוד": "דרום", "אשקלון": "דרום", "באר שבע": "דרום",
+    "רחובות": "שפלה"
+}
 
-def _city_score(stu_city: str, site_city: str) -> float:
-    stu_city, site_city = normalize_text(stu_city), normalize_text(site_city)
-    if not stu_city or not site_city:
-        return 60.0
-    if stu_city == site_city:
-        return 100.0
-    sim = _sim_ratio(stu_city, site_city)
-    if sim >= 0.85: return 92.0
-    if sim >= 0.70: return 85.0
-    if sim >= 0.50: return 75.0
-    return 65.0
+def _norm(s: Any) -> str:
+    return (str(s or "")).strip().lower()
 
-def _special_score(req: str, stu_city: str, site_city: str, site_name: str) -> float:
-    base = 55.0
-    txt = normalize_text(req)
-    same_city = normalize_text(stu_city) and normalize_text(site_city) and normalize_text(stu_city) == normalize_text(site_city)
-    if "קרוב" in txt and same_city:
-        base = 92.0
-    if site_name and normalize_text(site_name) in txt:
-        base = min(100.0, base + 6.0)
-    if site_city and normalize_text(site_city) in txt:
-        base = min(100.0, base + 6.0)
-    if "לא" in txt and ("רחוק" in txt or "לא בעיר" in txt):
-        base = max(35.0, base - 12.0)
-    return base
+def _tokenize_field(s: str) -> List[str]:
+    s = _norm(s)
+    s = re.sub(r"[^א-תa-z0-9\s/,+-]", " ", s)
+    parts = re.split(r"[/,|\\s]+", s)
+    return [p for p in parts if p]
+
+def jaccard(a: List[str], b: List[str]) -> float:
+    A, B = set(a), set(b)
+    if not A or not B: return 0.0
+    inter = len(A & B)
+    union = len(A | B)
+    return inter/union if union else 0.0
+
+def domain_score(stu_pref_text: str, site_field_text: str) -> int:
+    if not stu_pref_text or not site_field_text:
+        return 0
+    a = _tokenize_field(stu_pref_text)
+    b = _tokenize_field(site_field_text)
+    sim = jaccard(a, b)
+    if sim >= 0.67: return 100
+    if sim >= 0.33: return 80
+    return 50
+
+def city_score(stu_city: str, site_city: str) -> int:
+    s_c = normalize_text(stu_city)
+    t_c = normalize_text(site_city)
+    if not s_c or not t_c: return 0
+    if s_c == t_c: return 100
+    s_r = CITY_REGION.get(s_c, "")
+    t_r = CITY_REGION.get(t_c, "")
+    if s_r and t_r:
+        if s_r == t_r: return 85
+        NEI = {
+            "מרכז": {"שרון", "שפלה"},
+            "שרון": {"מרכז", "צפון"},
+            "צפון": {"שרון"},
+            "שפלה": {"מרכז", "דרום"},
+            "דרום": {"שפלה"},
+        }
+        if t_r in NEI.get(s_r, set()):
+            return 70
+        return 50
+    return 50
+
+def special_score(stu_req: str, same_city: bool) -> int:
+    txt = _norm(stu_req)
+    if not txt: return 0
+    if "קרוב" in txt or "קרבה" in txt or "בית" in txt:
+        return 100 if same_city else 70
+    return 60
+
+# ====== חישוב ציון ======
+def compute_score(stu: pd.Series, site: pd.Series, W: Weights) -> float:
+    same_city = (_norm(stu.get("stu_city")) and _norm(site.get("site_city")) and
+                 _norm(stu.get("stu_city")) == _norm(site.get("site_city")))
+    f = domain_score(stu.get("stu_pref",""), site.get("site_field",""))
+    c = city_score(stu.get("stu_city",""), site.get("site_city",""))
+    s = special_score(stu.get("stu_req",""), same_city)
+    score = W.w_field*f + W.w_city*c + W.w_special*s
+    return float(np.clip(score, 0, 100))
 
 def compute_score_with_explain(stu: pd.Series, site: pd.Series, W: Weights):
-    pref   = stu.get("stu_pref", "")
-    sfield = site.get("site_field", "")
-    scity  = site.get("site_city", "")
-    scname = site.get("site_name", "")
-    cty    = stu.get("stu_city", "")
-    req    = stu.get("stu_req", "")
-
-    field_s   = _field_score(pref, sfield)
-    city_s    = _city_score(cty, scity)
-    special_s = _special_score(req, cty, scity, scname)
-
+    same_city = (_norm(stu.get("stu_city")) and _norm(site.get("site_city")) and
+                 _norm(stu.get("stu_city")) == _norm(site.get("site_city")))
+    f = domain_score(stu.get("stu_pref",""), site.get("site_field",""))
+    c = city_score(stu.get("stu_city",""), site.get("site_city",""))
+    s = special_score(stu.get("stu_req",""), same_city)
     parts = {
-        "התאמת תחום": round(Weights.w_field * field_s),
-        "מרחק/גיאוגרפיה": round(Weights.w_city * city_s),
-        "בקשות מיוחדות": round(Weights.w_special * special_s),
-        "עדיפויות הסטודנט/ית": 0
+        "התאמת תחום": int(round(W.w_field * f)),
+        "מרחק/גיאוגרפיה": int(round(W.w_city * c)),
+        "בקשות מיוחדות": int(round(W.w_special * s)),
+        "עדיפויות הסטודנט/ית": 0,
     }
     score = int(np.clip(sum(parts.values()), 0, 100))
     return score, parts
-
-def compute_score(stu: pd.Series, site: pd.Series, W: Weights) -> float:
-    sc, _ = compute_score_with_explain(stu, site, W)
-    return float(sc)
 
 # =========================
 # 1) הוראות שימוש
 # =========================
 st.markdown("## 📘 הוראות שימוש")
 st.markdown("""
-1. **קובץ סטודנטים (CSV/XLSX):** שם פרטי, שם משפחה, תעודת זהות, כתובת/עיר, טלפון, אימייל.  
-   אופציונלי: תחום מועדף, בקשה מיוחדת, בן/בת זוג להכשרה.  
-2. **קובץ אתרים/מדריכים (CSV/XLSX):** מוסד/שירות, תחום התמחות, רחוב, עיר, מספר סטודנטים שניתן לקלוט השנה, מדריך, חוות דעת מדריך.  
-3. **בצע שיבוץ** מחשב *אחוז התאמה* לפי תחום (50%), בקשות מיוחדות (45%), עיר (5%). 
-4. בסוף אפשר להוריד **XLSX**. 
+1. **קובץ סטודנטים (CSV/XLSX):** שם פרטי, שם משפחה, תעודת זהות, עיר/כתובת, טלפון, אימייל.  
+   אופציונלי: תחום מועדף/ים, בקשה מיוחדת.  
+2. **קובץ אתרים/מדריכים (CSV/XLSX):** מוסד/שירות, תחום התמחות, עיר, קיבולת, מדריך, חוות דעת.  
+3. כפתור **בצע שיבוץ** מחשב אחוז התאמה לפי תחום (55%), אזור/עיר (25%), בקשות (20%).
 """)
 
 # =========================
@@ -350,21 +330,21 @@ with colB:
         except Exception as e:
             st.error(f"לא ניתן לקרוא את קובץ האתרים/מדריכים: {e}")
 
-for k in ["df_students_raw","df_sites_raw","result_df","unmatched_students","unused_sites"]:
+for k in ["df_students_raw","df_sites_raw","result_df","unmatched_students","unused_sites","sites_after"]:
     st.session_state.setdefault(k, None)
 
 # ====== שיבוץ ======
 def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, W: Weights) -> pd.DataFrame:
     results = []
-    supervisor_count = {}  # מונים פר-מדריך (דוגמה: עד 2 סטודנטים לכל מדריך)
+    supervisor_count = {}  # ניתן להגביל/לאפס לפי צורך (דוגמה: עד 2 סטודנטים לכל מדריך)
 
     for _, s in students_df.iterrows():
         cand = sites_df[sites_df["capacity_left"] > 0].copy()
         if cand.empty:
             results.append({
-                "ת\"ז הסטודנט": s["stu_id"],
-                "שם פרטי": s["stu_first"],
-                "שם משפחה": s["stu_last"],
+                "ת\"ז הסטודנט": s.get("stu_id",""),
+                "שם פרטי": s.get("stu_first",""),
+                "שם משפחה": s.get("stu_last",""),
                 "שם מקום ההתמחות": "לא שובץ",
                 "עיר המוסד": "",
                 "תחום ההתמחות במוסד": "",
@@ -374,26 +354,23 @@ def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, W: Weights) 
             })
             continue
 
-        # חישוב ציון + פירוק רכיבים
         cand[["score","_parts"]] = cand.apply(
-            lambda r: pd.Series(compute_score_with_explain(s, r, W)),
-            axis=1
+            lambda r: pd.Series(compute_score_with_explain(s, r, W)), axis=1
         )
 
-        # סינון לפי מדריך: מותר עד 2 סטודנטים לכל מדריך (ניתן לשנות לפי צורך)
+        # דוגמת מגבלה: עד 2 ל-מדריך (ניתן לבטל ע"י החזרת True קבוע)
         def allowed_supervisor(r):
             sup = r.get("שם המדריך", "")
-            return supervisor_count.get(sup, 0) < 2
+            return supervisor_count.get(sup, 0) < 2 if sup else True
 
         cand = cand[cand.apply(allowed_supervisor, axis=1)]
-
         if cand.empty:
             all_sites = sites_df[sites_df["capacity_left"] > 0].copy()
             if all_sites.empty:
                 results.append({
-                    "ת\"ז הסטודנט": s["stu_id"],
-                    "שם פרטי": s["stu_first"],
-                    "שם משפחה": s["stu_last"],
+                    "ת\"ז הסטודנט": s.get("stu_id",""),
+                    "שם פרטי": s.get("stu_first",""),
+                    "שם משפחה": s.get("stu_last",""),
                     "שם מקום ההתמחות": "לא שובץ",
                     "עיר המוסד": "",
                     "תחום ההתמחות במוסד": "",
@@ -402,10 +379,8 @@ def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, W: Weights) 
                     "_expl": {"התאמת תחום":0,"מרחק/גיאוגרפיה":0,"בקשות מיוחדות":0,"עדיפויות הסטודנט/ית":0}
                 })
                 continue
-
             all_sites[["score","_parts"]] = all_sites.apply(
-                lambda r: pd.Series(compute_score_with_explain(s, r, W)),
-                axis=1
+                lambda r: pd.Series(compute_score_with_explain(s, r, W)), axis=1
             )
             cand = all_sites.sort_values("score", ascending=False).head(1)
         else:
@@ -416,15 +391,16 @@ def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, W: Weights) 
         sites_df.at[idx, "capacity_left"] -= 1
 
         sup_name = chosen.get("שם המדריך", "")
-        supervisor_count[sup_name] = supervisor_count.get(sup_name, 0) + 1
+        if sup_name:
+            supervisor_count[sup_name] = supervisor_count.get(sup_name, 0) + 1
 
         results.append({
-            "ת\"ז הסטודנט": s["stu_id"],
-            "שם פרטי": s["stu_first"],
-            "שם משפחה": s["stu_last"],
-            "שם מקום ההתמחות": chosen["site_name"],
-            "עיר המוסד": chosen.get("site_city", ""),
-            "תחום ההתמחות במוסד": chosen["site_field"],
+            "ת\"ז הסטודנט": s.get("stu_id",""),
+            "שם פרטי": s.get("stu_first",""),
+            "שם משפחה": s.get("stu_last",""),
+            "שם מקום ההתמחות": chosen.get("site_name",""),
+            "עיר המוסד": chosen.get("site_city",""),
+            "תחום ההתמחות במוסד": chosen.get("site_field",""),
             "שם המדריך": sup_name,
             "אחוז התאמה": int(chosen["score"]),
             "_expl": chosen["_parts"]
@@ -437,19 +413,7 @@ def df_to_xlsx_bytes(df: pd.DataFrame, sheet_name: str = "שיבוץ") -> bytes:
     xlsx_io = BytesIO()
     import xlsxwriter
     with pd.ExcelWriter(xlsx_io, engine="xlsxwriter") as writer:
-        cols = list(df.columns)
-        has_match_col = "אחוז התאמה" in cols
-        if has_match_col:
-            cols = [c for c in cols if c != "אחוז התאמה"] + ["אחוז התאמה"]
-
-        df[cols].to_excel(writer, index=False, sheet_name=sheet_name)
-
-        if has_match_col:
-            workbook  = writer.book
-            worksheet = writer.sheets[sheet_name]
-            red_fmt = workbook.add_format({"font_color": "red"})
-            col_idx = len(cols) - 1
-            worksheet.set_column(col_idx, col_idx, 12, red_fmt)
+        df.to_excel(writer, index=False, sheet_name=sheet_name)
     xlsx_io.seek(0)
     return xlsx_io.getvalue()
 
@@ -460,9 +424,11 @@ if "result_df" not in st.session_state:
     st.session_state["result_df"] = None
 
 st.markdown("## ⚙️ ביצוע השיבוץ")
-colM1, colM2, colM3 = st.columns([1,2,1], gap="large")
-with colM2:
-    run_match = st.button("🚀 בצע שיבוץ", use_container_width=True)
+c1, c2, c3 = st.columns([1,6,1])
+with c2:
+    st.markdown('<div class="cta-wrap">', unsafe_allow_html=True)
+    run_match = st.button("בצע שיבוץ 🚀", use_container_width=True, key="run_match")
+    st.markdown('</div>', unsafe_allow_html=True)
 
 if run_match:
     try:
@@ -480,7 +446,7 @@ if isinstance(st.session_state["result_df"], pd.DataFrame) and not st.session_st
 
     base_df = st.session_state["result_df"].copy()
 
-    # ---- טבלת תוצאות מרכזית ----
+    # טבלת תוצאות מרכזית (לפי דרישת המרצים)
     df_show = pd.DataFrame({
         "אחוז התאמה": base_df["אחוז התאמה"].astype(int),
         "שם הסטודנט/ית": (base_df["שם פרטי"].astype(str) + " " + base_df["שם משפחה"].astype(str)).str.strip(),
@@ -494,13 +460,16 @@ if isinstance(st.session_state["result_df"], pd.DataFrame) and not st.session_st
     st.markdown("### טבלת תוצאות מרכזית")
     st.dataframe(df_show, use_container_width=True)
 
-    # הורדת קובץ תוצאות
+    # הורדה
     xlsx_results = df_to_xlsx_bytes(df_show, sheet_name="תוצאות")
-    st.download_button("⬇️ הורדת XLSX – תוצאות השיבוץ", data=xlsx_results,
+    st.download_button(
+        "⬇️ הורדת XLSX – תוצאות השיבוץ",
+        data=xlsx_results,
         file_name="student_site_matching.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
 
-    # --- הסבר ציון (שבירת התאמה) ---
+    # הסבר ציון
     st.markdown("### 🧩 הסבר ציון – שבירת התאמה")
     idx_max = len(base_df) - 1
     ex_idx = st.number_input("בחר/י שורה להסבר (0..):", min_value=0, max_value=idx_max, value=0, step=1)
@@ -515,7 +484,7 @@ if isinstance(st.session_state["result_df"], pd.DataFrame) and not st.session_st
     except Exception:
         st.info("אין נתוני הסבר לציון עבור השורה שנבחרה.")
 
-    # --- סיכום לפי מקום הכשרה ---
+    # דוח סיכום לפי מקום הכשרה
     st.markdown("### 📝 טבלת סיכום לפי מקום הכשרה")
     summary_df = (
         base_df
@@ -532,20 +501,19 @@ if isinstance(st.session_state["result_df"], pd.DataFrame) and not st.session_st
         axis=1
     )
     summary_df = summary_df[[
-        "שם miejsce ההתמחות".replace("miejsce","מקום"),
-        "תחום ההתמחות במוסד",
-        "שם המדריך",
-        "כמה סטודנטים",
-        "המלצת שיבוץ"
-    ]].rename(columns={"שם miejsce ההתמחות".replace("miejsce","מקום"): "שם מקום ההתמחות"})
-
+        "שם מקום ההתמחות","תחום ההתמחות במוסד","שם המדריך","כמה סטודנטים","המלצת שיבוץ"
+    ]]
     st.dataframe(summary_df, use_container_width=True)
-    xlsx_summary = df_to_xlsx_bytes(summary_df, sheet_name="סיכום")
-    st.download_button("⬇️ הורדת XLSX – טבלת סיכום", data=xlsx_summary,
-        file_name="student_site_summary.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
-    # --- דוח קיבולות ---
+    xlsx_summary = df_to_xlsx_bytes(summary_df, sheet_name="סיכום")
+    st.download_button(
+        "⬇️ הורדת XLSX – טבלת סיכום",
+        data=xlsx_summary,
+        file_name="student_site_summary.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+    # דוח קיבולות
     st.markdown("### 🏷️ דוח קיבולות לפי מקום הכשרה")
     sites_after = st.session_state.get("sites_after", None)
     if isinstance(sites_after, pd.DataFrame) and not sites_after.empty:
@@ -572,7 +540,7 @@ if isinstance(st.session_state["result_df"], pd.DataFrame) and not st.session_st
     else:
         st.info("לא נמצאו נתוני קיבולת לשיבוץ זה.")
 
-    # --- דוח פר־מורה ---
+    # דוח ריכוזי פר־מורה
     st.markdown("### 👩‍🏫 דוח פר־מורה שיטות")
     teachers_list = ["(כולם)"] + sorted([x for x in base_df["שם המדריך"].unique() if str(x).strip() != ""])
     pick_teacher = st.selectbox("סינון לפי מורה:", teachers_list, index=0)
