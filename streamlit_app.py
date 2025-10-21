@@ -184,15 +184,25 @@ def resolve_sites(df: pd.DataFrame) -> pd.DataFrame:
 # ====== חישוב ציון ======
 # "אחוז התאמה אמיתי" לפי הנתונים (בינארי לכל מרכיב) ומשקולות: תחום 50%, בקשות מיוחדות 45%, עיר 5%.
 def _binary_flags(stu: pd.Series, site: pd.Series):
-    same_city = (stu.get("stu_city") and site.get("site_city") and stu.get("stu_city") == site.get("site_city"))
-    field_ok  = bool(stu.get("stu_pref")) and (stu.get("stu_pref") in site.get("site_field",""))
-    special_ok = ("קרוב" in (stu.get("stu_req",""))) and same_city  # ניתן להרחיב לוגיקה כאן בעתיד
-    return int(field_ok), int(same_city), int(special_ok)
+    # שליפת שדות כמחרוזות מנורמלות
+    stu_city  = str(stu.get("stu_city")  or "").strip()
+    site_city = str(site.get("site_city") or "").strip()
 
+    stu_pref   = str(stu.get("stu_pref")   or "").strip()
+    site_field = str(site.get("site_field") or "").strip()
+
+    stu_req = str(stu.get("stu_req") or "").strip()
+
+    # חישובים בוליאניים מפורשים (ללא שימוש ב-and שמחזיר אופֶרַנדים)
+    same_city  = (stu_city != "") and (site_city != "") and (stu_city == site_city)
+    field_ok   = (stu_pref != "") and (stu_pref in site_field)
+    special_ok = ("קרוב" in stu_req) and same_city
+
+    return int(bool(field_ok)), int(bool(same_city)), int(bool(special_ok))
 def compute_score(stu: pd.Series, site: pd.Series, W: Weights) -> float:
     f_ok, c_ok, s_ok = _binary_flags(stu, site)
     score = 100.0 * (W.w_field*f_ok + W.w_city*c_ok + W.w_special*s_ok)
-    return float(np.clip(round(score), 0, 100))
+    return int(max(0, min(100, round(score))))
 
 def compute_score_with_explain(stu: pd.Series, site: pd.Series, W: Weights):
     f_ok, c_ok, s_ok = _binary_flags(stu, site)
