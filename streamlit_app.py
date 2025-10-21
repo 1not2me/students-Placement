@@ -8,6 +8,32 @@ from dataclasses import dataclass
 from typing import Optional, Any, List
 import re
 from difflib import SequenceMatcher
+# --- Hadasim CLM font embed (must be before any CSS that sets font-family)
+import base64, os
+from pathlib import Path
+
+def inject_hadasim_font():
+    font_path = Path("fonts/HadasimCLM-Regular.woff2")
+    if font_path.exists():
+        b64 = base64.b64encode(font_path.read_bytes()).decode("utf-8")
+        st.markdown(f"""
+        <style>
+        @font-face{{
+          font-family: 'HadasimCLM';
+          src: url(data:font/woff2;base64,{b64}) format('woff2');
+          font-weight: 400;
+          font-style: normal;
+          font-display: swap;
+        }}
+        :root {{ --app-font: 'HadasimCLM', 'Rubik', 'David', sans-serif; }}
+        html, body, .stApp, [data-testid="stAppViewContainer"], .main {{ font-family: var(--app-font) !important; }}
+        .stApp * {{ font-family: var(--app-font) !important; }}
+        </style>
+        """, unsafe_allow_html=True)
+    else:
+        st.warning("לא נמצא fonts/HadasimCLM-Regular.woff2 — נטען פונט ברירת-מחדל.")
+
+inject_hadasim_font()
 
 # =========================
 # קונפיגורציה כללית
