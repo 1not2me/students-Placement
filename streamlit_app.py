@@ -384,7 +384,8 @@ if st.button("🚀 בצע שיבוץ", use_container_width=True):
         st.success("השיבוץ הושלם ✓")
     except Exception as e:
         st.exception(e)
-if run_match:
+      
+  if run_match:
     try:
         students = resolve_students(st.session_state["df_students_raw"])
         sites    = resolve_sites(st.session_state["df_sites_raw"])
