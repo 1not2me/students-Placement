@@ -11,27 +11,42 @@ import re
 # =========================
 # קונפיגורציה כללית
 # =========================
+# ====== קונפיגורציה כללית ======
 st.set_page_config(page_title="מערכת שיבוץ סטודנטים – התאמה חכמה", layout="wide")
 
-# ====== CSS – עיצוב מודרני + RTL + גופן David ======
+# ====== CSS – עיצוב + RTL + David ======
 st.markdown("""
 <style>
 :root{
-  --bg-1:#e0f7fa;
-  --bg-2:#ede7f6;
-  --bg-3:#fff3e0;
-  --bg-4:#fce4ec;
-  --bg-5:#e8f5e9;
-  --ink:#0f172a;
-  --primary:#9b5de5;
-  --primary-700:#f15bb5;
-  --ring:rgba(155,93,229,.35);
+  --bg-1:#e0f7fa; --bg-2:#ede7f6; --bg-3:#fff3e0; --bg-4:#fce4ec; --bg-5:#e8f5e9;
+  --ink:#0f172a; --primary:#9b5de5; --primary-700:#f15bb5; --ring:rgba(155,93,229,.35);
 }
 
-html, body, [class*="css"], .stApp, .main, [data-testid="stSidebar"]{
+/* גופן David – גלובלי + כל רכיבי הטופס של Streamlit */
+html, body, [class*="css"], .stApp, .main, [data-testid="stSidebar"],
+.stMarkdown, .stText, .stCaption,
+.stButton button,
+.stTextInput input, .stNumberInput input,
+.stTextArea textarea,
+.stSelectbox [data-baseweb="select"] *, .stMultiSelect [data-baseweb="select"] *,
+.stDateInput input, .stTimeInput input,
+input, textarea, select {
   font-family: "David", "Noto Sans Hebrew", "Segoe UI", system-ui, sans-serif !important;
 }
 
+/* כיוון כתיבה ויישור לימין */
+.stApp,.main,[data-testid="stSidebar"]{ direction:rtl; text-align:right; }
+label,.stMarkdown,.stText,.stCaption{ text-align:right!important; }
+
+/* placeholder בגופן David */
+.stTextInput input::placeholder,
+.stTextArea textarea::placeholder,
+input::placeholder, textarea::placeholder {
+  font-family: "David", "Noto Sans Hebrew", "Segoe UI", system-ui, sans-serif !important;
+  opacity:.8;
+}
+
+/* רקע ו־Container */
 [data-testid="stAppViewContainer"]{
   background:
     radial-gradient(1200px 600px at 15% 10%, var(--bg-2) 0%, transparent 70%),
@@ -41,7 +56,6 @@ html, body, [class*="css"], .stApp, .main, [data-testid="stSidebar"]{
     linear-gradient(135deg, var(--bg-1) 0%, #ffffff 100%) !important;
   color: var(--ink);
 }
-
 .main .block-container{
   background: rgba(255,255,255,.78);
   backdrop-filter: blur(10px);
@@ -52,31 +66,19 @@ html, body, [class*="css"], .stApp, .main, [data-testid="stSidebar"]{
   margin-top:1rem;
 }
 
+/* כותרות */
 h1,h2,h3,.stMarkdown h1,.stMarkdown h2{
-  text-align:center;
-  letter-spacing:.5px;
-  text-shadow:0 1px 2px rgba(255,255,255,.7);
-  font-weight:700;
-  color:#222;
-  margin-bottom:1rem;
+  text-align:center; letter-spacing:.5px; text-shadow:0 1px 2px rgba(255,255,255,.7);
+  font-weight:700; color:#222; margin-bottom:1rem;
 }
 
-.stApp,.main,[data-testid="stSidebar"]{ direction:rtl; text-align:right; }
-label,.stMarkdown,.stText,.stCaption{ text-align:right!important; }
-
-/* כפתור ראשי – גדול ורחב ומרוכז */
+/* כפתור ראשי */
 .cta-wrap { max-width: 620px; margin: 0 auto; }
 .cta-wrap > div > button{
   background:linear-gradient(90deg,var(--primary) 0%,var(--primary-700) 100%)!important;
-  color:#fff!important;
-  border:none!important;
-  border-radius:24px!important;
-  padding:1.4rem 2rem!important;
-  font-size:1.25rem!important;
-  font-weight:700!important;
-  box-shadow:0 10px 22px var(--ring)!important;
-  transition:all .15s ease!important;
-  width:100%!important;
+  color:#fff!important; border:none!important; border-radius:24px!important;
+  padding:1.4rem 2rem!important; font-size:1.25rem!important; font-weight:700!important;
+  box-shadow:0 10px 22px var(--ring)!important; transition:all .15s ease!important; width:100%!important;
 }
 .cta-wrap > div > button:hover{ transform:translateY(-3px) scale(1.02); filter:brightness(1.07); }
 .cta-wrap > div > button:focus{ outline:none!important; box-shadow:0 0 0 4px var(--ring)!important; }
@@ -85,15 +87,15 @@ label,.stMarkdown,.stText,.stCaption{ text-align:right!important; }
 
 # ====== כותרת ======
 st.markdown("<h1>מערכת שיבוץ סטודנטים – התאמה חכמה</h1>", unsafe_allow_html=True)
+
 st.markdown("<p style='text-align:center;color:#475569;margin-top:-8px;'>כאן משבצים סטודנטים למקומות התמחות בקלות, בהתבסס על תחום, עיר ובקשות.</p>", unsafe_allow_html=True)
 
 # ====== מודל ניקוד ======
 @dataclass
 class Weights:
-    # משקלים מאוזנים – ייצרו שונות אמיתית
-    w_field: float   = 0.55   # תחום
-    w_city: float    = 0.25   # עיר/אזור
-    w_special: float = 0.20   # בקשות מיוחדות
+    w_field: float   = 0.50   # תחום ההתמחות
+    w_city: float    = 0.05   # אזור / עיר
+    w_special: float = 0.45   # בקשות מיוחדות
 
 # עמודות סטודנטים
 STU_COLS = {
