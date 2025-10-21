@@ -375,10 +375,15 @@ if "result_df" not in st.session_state:
     st.session_state["result_df"] = None
 
 st.markdown("## ⚙️ ביצוע השיבוץ")
-colM1, colM2 = st.columns([2,1], gap="large")
-with colM1:
-    run_match = st.button("🚀 בצע שיבוץ", use_container_width=True)
-
+if st.button("🚀 בצע שיבוץ", use_container_width=True):
+    try:
+        students = resolve_students(st.session_state["df_students_raw"])
+        sites    = resolve_sites(st.session_state["df_sites_raw"])
+        result_df = greedy_match(students, sites, Weights())
+        st.session_state["result_df"] = result_df
+        st.success("השיבוץ הושלם ✓")
+    except Exception as e:
+        st.exception(e)
 if run_match:
     try:
         students = resolve_students(st.session_state["df_students_raw"])
