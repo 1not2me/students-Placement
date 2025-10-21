@@ -379,6 +379,8 @@ st.markdown("## ⚙️ ביצוע השיבוץ")
 colM1, colM2 = st.columns([2,1], gap="large")
 with colM1:
     run_match = st.button("🚀 בצע שיבוץ", use_container_width=True)
+with colM2:
+    MATCH_THRESHOLD = st.slider("סף התאמה (אחוזים) – מתחת לסף: בדיקה ידנית", min_value=0, max_value=100, value=70, step=1)
 
 if run_match:
     try:
@@ -408,8 +410,9 @@ if isinstance(st.session_state["result_df"], pd.DataFrame) and not st.session_st
         "שם המדריך/ה": base_df["שם המדריך"],
     })
 
-    # מיון מהגבוה לנמוך (ללא סטטוס/סף)
+    # מיון מהגבוה לנמוך + סטטוס סף
     df_show = df_show.sort_values("אחוז התאמה", ascending=False)
+    df_show["סטטוס"] = df_show["אחוז התאמה"].apply(lambda v: "⚠ דורש בדיקה ידנית" if v < MATCH_THRESHOLD else "תקין")
 
     st.markdown("### טבלת תוצאות מרכזית")
     st.dataframe(df_show, use_container_width=True)
@@ -452,7 +455,7 @@ if isinstance(st.session_state["result_df"], pd.DataFrame) and not st.session_st
         axis=1
     )
     summary_df = summary_df[[
-        "שם miejsce ההתמחות".replace("miejsce","מקום"),
+        "שם miejsce ההתמחות".replace("miejsce","מקום"),  # הגנה קטנה מפני קידוד דפדפן
         "תחום ההתמחות במוסד",
         "שם המדריך",
         "כמה סטודנטים",
@@ -483,7 +486,7 @@ if isinstance(st.session_state["result_df"], pd.DataFrame) and not st.session_st
         cap_df = pd.DataFrame(cap_rows).sort_values("שם מקום ההתמחות")
         st.dataframe(cap_df, use_container_width=True)
 
-        # הדגשה טקסטואלית של פנוי/חריגה (נשאר — זה לא "בדיקה ידנית")
+        # הדגשה טקסטואלית
         under = cap_df[cap_df["יתרה/חוסר"] > 0]
         over  = cap_df[cap_df["יתרה/חוסר"] < 0]
         if not under.empty:
@@ -500,6 +503,7 @@ if isinstance(st.session_state["result_df"], pd.DataFrame) and not st.session_st
     df_for_teacher = base_df.copy()
     if pick_teacher != "(כולם)":
         df_for_teacher = df_for_teacher[df_for_teacher["שם המדריך"] == pick_teacher]
+    # רשימת הסטודנטים + ניצול קיבולת לאותם מוסדות
     st.dataframe(
         pd.DataFrame({
             "שם הסטודנט/ית": (df_for_teacher["שם פרטי"].astype(str) + " " + df_for_teacher["שם משפחה"].astype(str)).str.strip(),
