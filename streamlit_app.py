@@ -1,4 +1,4 @@
-# matcher_streamlit_beauty_rtl_v7_fixed.py
+# matcher_streamlit_beauty_rtl_v7_fixed.py 
 # -*- coding: utf-8 -*-
 import streamlit as st
 import pandas as pd
@@ -18,7 +18,7 @@ st.markdown("""
 @import url('https://fonts.googleapis.com/css2?family=Rubik:wght@400;600&display=swap');
 
 html, body, [class*="css"] { 
- font-family: 'Rubik', 'David', sans-serif !important; 
+  font-family: 'Rubik', 'David', sans-serif !important; 
 }
 
 :root{
@@ -95,14 +95,12 @@ label,.stMarkdown,.stText,.stCaption{ text-align:right!important; }
 st.markdown("<h1>מערכת שיבוץ סטודנטים – התאמה חכמה</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align:center;color:#475569;margin-top:-8px;'>כאן משבצים סטודנטים למקומות התמחות בקלות, בהתבסס על תחום, עיר ובקשות.</p>", unsafe_allow_html=True)
 
-# ===============================================
-# 👇 שינוי 1: מודל ניקוד – הגדלת משקל התחום
-# ===============================================
+# ====== מודל ניקוד ======
 @dataclass
 class Weights:
-    w_field: float = 0.65 # עלה מ-0.50 ל-0.65 (הכי קריטי)
+    w_field: float = 0.50
     w_city: float = 0.05
-    w_special: float = 0.30 # ירד מ-0.45 ל-0.30
+    w_special: float = 0.45
 
 # עמודות סטודנטים
 STU_COLS = {
@@ -183,61 +181,41 @@ def resolve_sites(df: pd.DataFrame) -> pd.DataFrame:
         out[c] = out[c].apply(normalize_text)
     return out
 
-# ===============================================
-# 👇 שינוי 2: חישוב ציון – הקטנת ציון אי-התאמה
-# ===============================================
 # ====== חישוב ציון ======
 def compute_score(stu: pd.Series, site: pd.Series, W: Weights) -> float:
     same_city = (stu.get("stu_city") and site.get("site_city") and stu.get("stu_city") == site.get("site_city"))
-    
-    # תחום: יורד מ-60 ל-30 אם אין התאמה
-    field_s   = 100.0 if stu.get("stu_pref") and stu.get("stu_pref") in site.get("site_field","") else 30.0 
-    
-    # עיר: יורד מ-65 ל-20 אם אין התאמה
-    city_s    = 100.0 if same_city else 20.0 
-    
-    # בקשה מיוחדת: יורד מ-70 ל-40 אם אין התאמה (או הבקשה היא "קרוב" אך אין התאמת עיר)
-    special_s = 100.0 if "קרוב" in stu.get("stu_req","") and same_city else 40.0
-    
+    field_s   = 90.0 if stu.get("stu_pref") and stu.get("stu_pref") in site.get("site_field","") else 60.0
+    city_s    = 100.0 if same_city else 65.0
+    special_s = 90.0 if "קרוב" in stu.get("stu_req","") and same_city else 70.0
     score = W.w_field*field_s + W.w_city*city_s + W.w_special*special_s
     return float(np.clip(score, 0, 100))
 
 # --- גרסה עם פירוט מרכיבים (לשבירת הציון) ---
 def compute_score_with_explain(stu: pd.Series, site: pd.Series, W: Weights):
     same_city = (stu.get("stu_city") and site.get("site_city") and stu.get("stu_city") == site.get("site_city"))
-    
-    # תחום: יורד מ-60 ל-30 אם אין התאמה
-    field_s   = 100.0 if stu.get("stu_pref") and stu.get("stu_pref") in site.get("site_field","") else 30.0
-    
-    # עיר: יורד מ-65 ל-20 אם אין התאמה
-    city_s    = 100.0 if same_city else 20.0
-    
-    # בקשה מיוחדת: יורד מ-70 ל-40 אם אין התאמה (או הבקשה היא "קרוב" אך אין התאמת עיר)
-    special_s = 100.0 if "קרוב" in stu.get("stu_req","") and same_city else 40.0
+    field_s   = 90.0 if stu.get("stu_pref") and stu.get("stu_pref") in site.get("site_field","") else 60.0
+    city_s    = 100.0 if same_city else 65.0
+    special_s = 90.0 if "קרוב" in stu.get("stu_req","") and same_city else 70.0
 
     parts = {
         "התאמת תחום": round(W.w_field*field_s),
         "מרחק/גיאוגרפיה": round(W.w_city*city_s),
         "בקשות מיוחדות": round(W.w_special*special_s),
-        "עדיפויות הסטודנט/ית": 0 # אין קלט דירוג מפורש בקובץ זה; נשאר 0 לשקיפות
+        "עדיפויות הסטודנט/ית": 0  # אין קלט דירוג מפורש בקובץ זה; נשאר 0 לשקיפות
     }
     score = int(np.clip(sum(parts.values()), 0, 100))
     return score, parts
-# ===============================================
-# סוף שינויים בחישוב
-# ===============================================
 
 # =========================
 # 1) הוראות שימוש
 # =========================
 st.markdown("## 📘 הוראות שימוש")
-# עדכון המשקלים בהוראות
 st.markdown("""
 1. **קובץ סטודנטים (CSV/XLSX):** שם פרטי, שם משפחה, תעודת זהות, כתובת/עיר, טלפון, אימייל.  
    אופציונלי: תחום מועדף, בקשה מיוחדת, בן/בת זוג להכשרה.  
 2. **קובץ אתרים/מדריכים (CSV/XLSX):** מוסד/שירות, תחום התמחות, רחוב, עיר, מספר סטודנטים שניתן לקלוט השנה, מדריך, חוות דעת מדריך.  
-3. **בצע שיבוץ** מחשב *אחוז התאמה* לפי תחום (65%), בקשות מיוחדות (30%), עיר (5%).  
-4. בסוף אפשר להוריד **XLSX**.  
+3. **בצע שיבוץ** מחשב *אחוז התאמה* לפי תחום (50%), בקשות מיוחדות (45%), עיר (5%). 
+4. בסוף אפשר להוריד **XLSX**. 
 """)
 
 # =========================
@@ -385,18 +363,9 @@ def df_to_xlsx_bytes(df: pd.DataFrame, sheet_name: str = "שיבוץ") -> bytes:
         if has_match_col:
             workbook  = writer.book
             worksheet = writer.sheets[sheet_name]
-            # שינוי: צבע הציון יהיה אדום רק ל-70 ומטה, כדי להדגיש ציונים נמוכים יותר
-            low_score_fmt = workbook.add_format({"font_color": "red"})
+            red_fmt = workbook.add_format({"font_color": "red"})
             col_idx = len(cols) - 1
-            # שימוש ב-conditional format להדגשת ציונים נמוכים
-            worksheet.conditional_format(
-                 1, col_idx, len(df), col_idx,
-                 {'type': 'cell',
-                  'criteria': '<',
-                  'value': 70,
-                  'format': low_score_fmt}
-            )
-
+            worksheet.set_column(col_idx, col_idx, 12, red_fmt)
     xlsx_io.seek(0)
     return xlsx_io.getvalue()
 
@@ -413,16 +382,13 @@ with colM1:
 
 if run_match:
     try:
-        if st.session_state["df_students_raw"] is None or st.session_state["df_sites_raw"] is None:
-             st.error("יש להעלות את שני הקבצים כדי לבצע שיבוץ.")
-        else:
-            students = resolve_students(st.session_state["df_students_raw"])
-            sites    = resolve_sites(st.session_state["df_sites_raw"])
-            result_df = greedy_match(students, sites, Weights())
-            st.session_state["result_df"] = result_df
-            # נשמור גם עותק של ה"sites" כדי להשתמש לקיבולות
-            st.session_state["sites_after"] = sites
-            st.success("השיבוץ הושלם ✓")
+        students = resolve_students(st.session_state["df_students_raw"])
+        sites    = resolve_sites(st.session_state["df_sites_raw"])
+        result_df = greedy_match(students, sites, Weights())
+        st.session_state["result_df"] = result_df
+        # נשמור גם עותק של ה"sites" כדי להשתמש לקיבולות
+        st.session_state["sites_after"] = sites
+        st.success("השיבוץ הושלם ✓")
     except Exception as e:
         st.exception(e)
 
