@@ -20,7 +20,6 @@ st.markdown("""
 html, body, [class*="css"] { 
   font-family: 'Rubik', 'David', sans-serif !important; 
 }
-
 :root{
   --bg-1:#e0f7fa;
   --bg-2:#ede7f6;
@@ -32,7 +31,6 @@ html, body, [class*="css"] {
   --primary-700:#f15bb5;
   --ring:rgba(155,93,229,.35);
 }
-
 [data-testid="stAppViewContainer"]{
   background:
     radial-gradient(1200px 600px at 15% 10%, var(--bg-2) 0%, transparent 70%),
@@ -42,7 +40,6 @@ html, body, [class*="css"] {
     linear-gradient(135deg, var(--bg-1) 0%, #ffffff 100%) !important;
   color: var(--ink);
 }
-
 .main .block-container{
   background: rgba(255,255,255,.78);
   backdrop-filter: blur(10px);
@@ -52,7 +49,6 @@ html, body, [class*="css"] {
   padding:2.5rem;
   margin-top:1rem;
 }
-
 h1,h2,h3,.stMarkdown h1,.stMarkdown h2{
   text-align:center;
   letter-spacing:.5px;
@@ -61,7 +57,6 @@ h1,h2,h3,.stMarkdown h1,.stMarkdown h2{
   color:#222;
   margin-bottom:1rem;
 }
-
 .stButton > button,
 div[data-testid="stDownloadButton"] > button{
   background:linear-gradient(135deg,var(--primary) 0%,var(--primary-700) 100%)!important;
@@ -86,8 +81,13 @@ div[data-testid="stDownloadButton"] > button:focus{
   box-shadow:0 0 0 4px var(--ring)!important; 
 }
 
+/* RTL */
 .stApp,.main,[data-testid="stSidebar"]{ direction:rtl; text-align:right; }
 label,.stMarkdown,.stText,.stCaption{ text-align:right!important; }
+
+/* יישור מרכז לכפתור בצע שיבוץ */
+.match-btn-wrap { display:flex; justify-content:center; align-items:center; }
+.match-btn-wrap > div { min-width:280px; max-width:380px; width:100%; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -182,26 +182,25 @@ def resolve_sites(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 # ====== חישוב ציון ======
+# "אחוז התאמה אמיתי" לפי הנתונים (בינארי לכל מרכיב) ומשקולות: תחום 50%, בקשות מיוחדות 45%, עיר 5%.
+def _binary_flags(stu: pd.Series, site: pd.Series):
+    same_city = (stu.get("stu_city") and site.get("site_city") and stu.get("stu_city") == site.get("site_city"))
+    field_ok  = bool(stu.get("stu_pref")) and (stu.get("stu_pref") in site.get("site_field",""))
+    special_ok = ("קרוב" in (stu.get("stu_req",""))) and same_city  # ניתן להרחיב לוגיקה כאן בעתיד
+    return int(field_ok), int(same_city), int(special_ok)
+
 def compute_score(stu: pd.Series, site: pd.Series, W: Weights) -> float:
-    same_city = (stu.get("stu_city") and site.get("site_city") and stu.get("stu_city") == site.get("site_city"))
-    field_s   = 90.0 if stu.get("stu_pref") and stu.get("stu_pref") in site.get("site_field","") else 60.0
-    city_s    = 100.0 if same_city else 65.0
-    special_s = 90.0 if "קרוב" in stu.get("stu_req","") and same_city else 70.0
-    score = W.w_field*field_s + W.w_city*city_s + W.w_special*special_s
-    return float(np.clip(score, 0, 100))
+    f_ok, c_ok, s_ok = _binary_flags(stu, site)
+    score = 100.0 * (W.w_field*f_ok + W.w_city*c_ok + W.w_special*s_ok)
+    return float(np.clip(round(score), 0, 100))
 
-# --- גרסה עם פירוט מרכיבים (לשבירת הציון) ---
 def compute_score_with_explain(stu: pd.Series, site: pd.Series, W: Weights):
-    same_city = (stu.get("stu_city") and site.get("site_city") and stu.get("stu_city") == site.get("site_city"))
-    field_s   = 90.0 if stu.get("stu_pref") and stu.get("stu_pref") in site.get("site_field","") else 60.0
-    city_s    = 100.0 if same_city else 65.0
-    special_s = 90.0 if "קרוב" in stu.get("stu_req","") and same_city else 70.0
-
+    f_ok, c_ok, s_ok = _binary_flags(stu, site)
     parts = {
-        "התאמת תחום": round(W.w_field*field_s),
-        "מרחק/גיאוגרפיה": round(W.w_city*city_s),
-        "בקשות מיוחדות": round(W.w_special*special_s),
-        "עדיפויות הסטודנט/ית": 0  # אין קלט דירוג מפורש בקובץ זה; נשאר 0 לשקיפות
+        "התאמת תחום": int(round(100*W.w_field*f_ok)),
+        "מרחק/גיאוגרפיה": int(round(100*W.w_city*c_ok)),
+        "בקשות מיוחדות": int(round(100*W.w_special*s_ok)),
+        "עדיפויות הסטודנט/ית": 0  # אין דירוג מפורש בקלט
     }
     score = int(np.clip(sum(parts.values()), 0, 100))
     return score, parts
@@ -264,13 +263,13 @@ with colB:
         except Exception as e:
             st.error(f"לא ניתן לקרוא את קובץ האתרים/מדריכים: {e}")
 
-for k in ["df_students_raw","df_sites_raw","result_df","unmatched_students","unused_sites"]:
+for k in ["df_students_raw","df_sites_raw","result_df","unmatched_students","unused_sites","sites_after"]:
     st.session_state.setdefault(k, None)
 
 # ====== שיבוץ ======
 def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, W: Weights) -> pd.DataFrame:
     results = []
-    supervisor_count = {}  # מונים פר-מדריך (דוגמה: עד 2 סטודנטים לכל מדריך)
+    supervisor_count = {}  # דוגמה: עד 2 סטודנטים לכל מדריך
 
     for _, s in students_df.iterrows():
         cand = sites_df[sites_df["capacity_left"] > 0].copy()
@@ -302,7 +301,6 @@ def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, W: Weights) 
         cand = cand[cand.apply(allowed_supervisor, axis=1)]
 
         if cand.empty:
-            # אם אין מדריכים פנויים – נבחר את האתר עם הציון הגבוה ביותר מבין הזמינים לפני הסינון
             all_sites = sites_df[sites_df["capacity_left"] > 0].copy()
             if all_sites.empty:
                 results.append({
@@ -341,7 +339,6 @@ def greedy_match(students_df: pd.DataFrame, sites_df: pd.DataFrame, W: Weights) 
             "עיר המוסד": chosen.get("site_city", ""),
             "תחום ההתמחות במוסד": chosen["site_field"],
             "שם המדריך": sup_name,
-            # >>> דרישת המרצים: אחוז התאמה מספר שלם
             "אחוז התאמה": int(chosen["score"]),
             "_expl": chosen["_parts"]
         })
@@ -376,11 +373,13 @@ if "result_df" not in st.session_state:
     st.session_state["result_df"] = None
 
 st.markdown("## ⚙️ ביצוע השיבוץ")
-colM1, colM2 = st.columns([2,1], gap="large")
-with colM1:
+
+# כפתור ממורכז
+center1, center2, center3 = st.columns([1,2,1], gap="large")
+with center2:
+    st.markdown('<div class="match-btn-wrap">', unsafe_allow_html=True)
     run_match = st.button("🚀 בצע שיבוץ", use_container_width=True)
-with colM2:
-    MATCH_THRESHOLD = st.slider("סף התאמה (אחוזים) – מתחת לסף: בדיקה ידנית", min_value=0, max_value=100, value=70, step=1)
+    st.markdown('</div>', unsafe_allow_html=True)
 
 if run_match:
     try:
@@ -388,8 +387,7 @@ if run_match:
         sites    = resolve_sites(st.session_state["df_sites_raw"])
         result_df = greedy_match(students, sites, Weights())
         st.session_state["result_df"] = result_df
-        # נשמור גם עותק של ה"sites" כדי להשתמש לקיבולות
-        st.session_state["sites_after"] = sites
+        st.session_state["sites_after"] = sites  # לשימוש בדוחות קיבולת
         st.success("השיבוץ הושלם ✓")
     except Exception as e:
         st.exception(e)
@@ -399,7 +397,7 @@ if isinstance(st.session_state["result_df"], pd.DataFrame) and not st.session_st
 
     base_df = st.session_state["result_df"].copy()
 
-    # ---- בניית טבלת התוצאות המרכזית לפי סדר/תוויות המרצים ----
+    # ---- טבלת תוצאות מרכזית ----
     df_show = pd.DataFrame({
         "אחוז התאמה": base_df["אחוז התאמה"].astype(int),
         "שם הסטודנט/ית": (base_df["שם פרטי"].astype(str) + " " + base_df["שם משפחה"].astype(str)).str.strip(),
@@ -408,11 +406,7 @@ if isinstance(st.session_state["result_df"], pd.DataFrame) and not st.session_st
         "עיר המוסד": base_df["עיר המוסד"],
         "שם מקום ההתמחות": base_df["שם מקום ההתמחות"],
         "שם המדריך/ה": base_df["שם המדריך"],
-    })
-
-    # מיון מהגבוה לנמוך + סטטוס סף
-    df_show = df_show.sort_values("אחוז התאמה", ascending=False)
-    df_show["סטטוס"] = df_show["אחוז התאמה"].apply(lambda v: "⚠ דורש בדיקה ידנית" if v < MATCH_THRESHOLD else "תקין")
+    }).sort_values("אחוז התאמה", ascending=False)
 
     st.markdown("### טבלת תוצאות מרכזית")
     st.dataframe(df_show, use_container_width=True)
@@ -455,7 +449,7 @@ if isinstance(st.session_state["result_df"], pd.DataFrame) and not st.session_st
         axis=1
     )
     summary_df = summary_df[[
-        "שם miejsce ההתמחות".replace("miejsce","מקום"),  # הגנה קטנה מפני קידוד דפדפן
+        "שם miejsce ההתמחות".replace("miejsce","מקום"),
         "תחום ההתמחות במוסד",
         "שם המדריך",
         "כמה סטודנטים",
@@ -486,7 +480,6 @@ if isinstance(st.session_state["result_df"], pd.DataFrame) and not st.session_st
         cap_df = pd.DataFrame(cap_rows).sort_values("שם מקום ההתמחות")
         st.dataframe(cap_df, use_container_width=True)
 
-        # הדגשה טקסטואלית
         under = cap_df[cap_df["יתרה/חוסר"] > 0]
         over  = cap_df[cap_df["יתרה/חוסר"] < 0]
         if not under.empty:
@@ -503,7 +496,6 @@ if isinstance(st.session_state["result_df"], pd.DataFrame) and not st.session_st
     df_for_teacher = base_df.copy()
     if pick_teacher != "(כולם)":
         df_for_teacher = df_for_teacher[df_for_teacher["שם המדריך"] == pick_teacher]
-    # רשימת הסטודנטים + ניצול קיבולת לאותם מוסדות
     st.dataframe(
         pd.DataFrame({
             "שם הסטודנט/ית": (df_for_teacher["שם פרטי"].astype(str) + " " + df_for_teacher["שם משפחה"].astype(str)).str.strip(),
