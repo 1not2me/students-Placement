@@ -67,24 +67,27 @@ div[data-testid="stDownloadButton"] > button{
   background:linear-gradient(135deg,var(--primary) 0%,var(--primary-700) 100%)!important;
   color:#fff!important;
   border:none!important;
-  border-radius:18px!important;
-  padding:1rem 2rem!important;
-  font-size:1.1rem!important;
-  font-weight:600!important;
-  box-shadow:0 8px 18px var(--ring)!important;
+  border-radius:24px!important;        /* קודם 18px */
+  padding:1.4rem 2.8rem!important;     /* קודם 1rem 2rem – יותר גובה ורוחב */
+  font-size:1.25rem!important;         /* קודם 1.1rem – טקסט גדול יותר */
+  font-weight:700!important;
+  box-shadow:0 10px 22px var(--ring)!important;
   transition:all .15s ease!important;
   width:100% !important;
+  min-height:64px!important;           /* מוסיף גובה מינימלי */
+  letter-spacing:.3px;
 }
 .stButton > button:hover,
 div[data-testid="stDownloadButton"] > button:hover{ 
-  transform:translateY(-3px) scale(1.02); 
-  filter:brightness(1.08); 
+  transform:translateY(-3px) scale(1.03); 
+  filter:brightness(1.09); 
 }
 .stButton > button:focus,
 div[data-testid="stDownloadButton"] > button:focus{ 
   outline:none!important; 
-  box-shadow:0 0 0 4px var(--ring)!important; 
+  box-shadow:0 0 0 5px var(--ring)!important; 
 }
+
 
 .stApp,.main,[data-testid="stSidebar"]{ direction:rtl; text-align:right; }
 label,.stMarkdown,.stText,.stCaption{ text-align:right!important; }
