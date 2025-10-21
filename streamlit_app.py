@@ -372,13 +372,114 @@ def df_to_xlsx_bytes(df: pd.DataFrame, sheet_name: str = "שיבוץ") -> bytes:
 # =========================
 # שיבוץ והצגת תוצאות
 # =========================
+st.markdown("""
+<style>
+/* גופנים יפים לעברית */
+@import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300..900&family=Rubik:wght@400;600;800&display=swap');
+
+html, body, [class*="css"]{
+  font-family: 'Heebo','Rubik','David',sans-serif !important;
+}
+
+/* צבעים ושכבות */
+:root{
+  --bg-1:#e0f7fa;
+  --bg-2:#ede7f6;
+  --bg-3:#fff3e0;
+  --bg-4:#fce4ec;
+  --bg-5:#e8f5e9;
+  --ink:#0f172a;
+  --primary:#9b5de5;
+  --primary-700:#f15bb5;
+  --ring:rgba(155,93,229,.35);
+}
+
+[data-testid="stAppViewContainer"]{
+  background:
+    radial-gradient(1200px 600px at 15% 10%, var(--bg-2) 0%, transparent 70%),
+    radial-gradient(1000px 700px at 85% 20%, var(--bg-3) 0%, transparent 70%),
+    radial-gradient(900px 500px at 50% 80%, var(--bg-4) 0%, transparent 70%),
+    radial-gradient(700px 400px at 10% 85%, var(--bg-5) 0%, transparent 70%),
+    linear-gradient(135deg, var(--bg-1) 0%, #ffffff 100%) !important;
+  color: var(--ink);
+}
+
+.main .block-container{
+  background: rgba(255,255,255,.78);
+  backdrop-filter: blur(10px);
+  border:1px solid rgba(15,23,42,.08);
+  box-shadow:0 15px 35px rgba(15,23,42,.08);
+  border-radius:24px;
+  padding:2.5rem;
+  margin-top:1rem;
+}
+
+/* כותרות – Rubik מודגש, ניקוי */
+h1,h2,h3,.stMarkdown h1,.stMarkdown h2{
+  font-family:'Rubik','Heebo',sans-serif !important;
+  text-align:center;
+  letter-spacing:.2px;
+  text-shadow:0 1px 2px rgba(255,255,255,.7);
+  font-weight:800;
+  color:#222;
+  margin-bottom:1rem;
+}
+
+/* כפתורים */
+.stButton > button,
+div[data-testid="stDownloadButton"] > button{
+  background:linear-gradient(135deg,var(--primary) 0%,var(--primary-700) 100%)!important;
+  color:#fff!important;
+  border:none!important;
+  border-radius:18px!important;
+  padding:1rem 2rem!important;
+  font-size:1.1rem!important;
+  font-weight:600!important;
+  box-shadow:0 8px 18px var(--ring)!important;
+  transition:all .15s ease!important;
+  width:100% !important;
+}
+.stButton > button:hover,
+div[data-testid="stDownloadButton"] > button:hover{
+  transform:translateY(-3px) scale(1.02);
+  filter:brightness(1.08);
+}
+.stButton > button:focus,
+div[data-testid="stDownloadButton"] > button:focus{
+  outline:none!important;
+  box-shadow:0 0 0 4px var(--ring)!important;
+}
+
+/* RTL מלא */
+.stApp,.main,[data-testid="stSidebar"]{ direction:rtl; text-align:right; }
+label,.stMarkdown,.stText,.stCaption{ text-align:right!important; }
+
+/* יישור מרכז לכפתור השיבוץ */
+.match-btn-wrap{
+  display:flex; 
+  justify-content:center; 
+  align-items:center;
+}
+.match-btn-wrap > div{ 
+  width:100%; 
+  max-width:420px;   /* שליטה על רוחב הכפתור */
+  min-width:260px;
+}
+</style>
+""", unsafe_allow_html=True)
+
+
 if "result_df" not in st.session_state:
     st.session_state["result_df"] = None
 
 st.markdown("## ⚙️ ביצוע השיבוץ")
-colM1, colM2 = st.columns([2,1], gap="large")
-with colM1:
+
+# כפתור ממורכז ויפה
+c1, c2, c3 = st.columns([1, 2, 1], gap="large")
+with c2:
+    st.markdown('<div class="match-btn-wrap">', unsafe_allow_html=True)
     run_match = st.button("🚀 בצע שיבוץ", use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
 if run_match:
     try:
